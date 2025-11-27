@@ -55,26 +55,26 @@ export default function StudentDashboard() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatsCard
           title="Total Fees"
-          value={`₹${studentStats.totalFees.toLocaleString()}`}
+          value={`KES ${studentStats.totalFees.toLocaleString()}`}
           icon={CreditCard}
           description="This academic year"
         />
         <StatsCard
           title="Paid Amount"
-          value={`₹${studentStats.paidAmount.toLocaleString()}`}
+          value={`KES ${studentStats.paidAmount.toLocaleString()}`}
           change={{ value: 80, type: 'increase' }}
           icon={DollarSign}
           description="Amount paid"
         />
         <StatsCard
           title="Pending Amount"
-          value={`₹${studentStats.pendingAmount.toLocaleString()}`}
+          value={`KES ${studentStats.pendingAmount.toLocaleString()}`}
           icon={Calendar}
           description="Outstanding fees"
         />
         <StatsCard
           title="Overdue Amount"
-          value={`₹${studentStats.overdueAmount.toLocaleString()}`}
+          value={`KES ${studentStats.overdueAmount.toLocaleString()}`}
           icon={AlertTriangle}
           description="Past due date"
         />
@@ -102,7 +102,7 @@ export default function StudentDashboard() {
                       <CheckCircle className="h-4 w-4 text-green-600" />
                     </div>
                     <div>
-                      <p className="font-medium">₹{payment.amount.toLocaleString()}</p>
+                      <p className="font-medium">KES {payment.amount.toLocaleString()}</p>
                       <p className="text-sm text-muted-foreground">{payment.method}</p>
                     </div>
                   </div>
@@ -138,7 +138,7 @@ export default function StudentDashboard() {
                     <p className="text-sm text-muted-foreground">Due: {due.dueDate}</p>
                   </div>
                   <div className="text-right">
-                    <p className="font-medium">₹{due.amount.toLocaleString()}</p>
+                    <p className="font-medium">KES {due.amount.toLocaleString()}</p>
                     <Badge 
                       variant={due.status === 'overdue' ? 'destructive' : 'secondary'}
                       className="text-xs"

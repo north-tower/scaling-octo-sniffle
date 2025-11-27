@@ -24,18 +24,17 @@ export function DashboardLayout({ children, className }: DashboardLayoutProps) {
         />
       )}
 
-      {/* Sidebar */}
-      <div className="fixed inset-y-0 left-0 z-50 w-64 md:relative md:z-auto">
-        <Sidebar
-          isMobile={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
-          className={cn(
-            'transform transition-transform duration-200 ease-in-out',
-            sidebarOpen ? 'translate-x-0' : '-translate-x-full',
-            'md:translate-x-0'
-          )}
-        />
-      </div>
+      {/* Sidebar - Fixed on all screen sizes */}
+      <Sidebar
+        isMobile={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 w-64',
+          'transform transition-transform duration-200 ease-in-out',
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full',
+          'md:translate-x-0'
+        )}
+      />
 
       {/* Main content */}
       <div className="flex flex-col md:ml-64">
@@ -43,7 +42,7 @@ export function DashboardLayout({ children, className }: DashboardLayoutProps) {
         <Header onMenuClick={() => setSidebarOpen(true)} />
         
         {/* Breadcrumbs */}
-        <div className="border-b bg-background px-4 py-2">
+        <div className="border-b bg-background px-4 py-1">
           <Breadcrumbs />
         </div>
 
@@ -57,4 +56,3 @@ export function DashboardLayout({ children, className }: DashboardLayoutProps) {
 }
 
 export default DashboardLayout;
-

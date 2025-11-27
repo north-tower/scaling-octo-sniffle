@@ -44,25 +44,52 @@ A comprehensive, modern fee management system built with Next.js 14, TypeScript,
    ```
 
 3. **Set up environment variables**
-   ```bash
-   cp .env.example .env.local
-   ```
    
-   Update the environment variables in `.env.local`:
+   Your `.env.local` is already configured:
    ```env
    NEXT_PUBLIC_API_URL=http://localhost:5000/api
-   NEXT_PUBLIC_APP_ENV=development
-   NEXTAUTH_SECRET=your-secret-key-here
-   NEXTAUTH_URL=http://localhost:3000
+   NEXT_PUBLIC_APP_NAME=Fee Management System
+   NEXT_PUBLIC_APP_VERSION=1.0.0
+   NODE_ENV=development
    ```
 
-4. **Start the development server**
+4. **Start the backend server**
+   
+   Make sure your backend is running on port 5000:
+   ```bash
+   cd /path/to/backend
+   npm run dev
+   ```
+
+5. **Start the frontend development server**
    ```bash
    npm run dev
    ```
 
-5. **Open your browser**
+6. **Test the connection**
+   
+   Visit [http://localhost:3000/test-connection](http://localhost:3000/test-connection) to verify backend connectivity
+
+7. **Open your browser**
    Navigate to [http://localhost:3000](http://localhost:3000)
+
+## 🔗 Backend Integration
+
+This frontend is integrated with a backend API. See the integration guides:
+
+- **[QUICK_START.md](QUICK_START.md)** - Get started in 5 minutes
+- **[INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md)** - Detailed API documentation
+- **[REDIRECT_FIX.md](REDIRECT_FIX.md)** - Login redirect functionality
+- **Test Connection**: Visit `/test-connection` to verify setup
+
+### API Configuration
+
+The frontend communicates with the backend via:
+- **Base URL**: `http://localhost:5000/api`
+- **Authentication**: JWT tokens stored in localStorage and cookies
+- **Auto-refresh**: Tokens automatically refresh on expiry
+- **Error handling**: Centralized error handling with toast notifications
+- **Protected Routes**: Middleware automatically redirects unauthenticated users
 
 ## 🏗️ Project Structure
 

@@ -67,7 +67,7 @@ export function FormField({
       case 'select':
         return (
           <Select
-            value={value || ''}
+            value={value && value !== '' ? value : undefined}
             onValueChange={onChange}
             disabled={disabled}
           >
@@ -75,11 +75,18 @@ export function FormField({
               <SelectValue placeholder={placeholder} />
             </SelectTrigger>
             <SelectContent>
-              {options.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
+              {options.map((option) => {
+                // Ensure option value is not empty string
+                if (option.value === '') {
+                  console.warn('Select option value cannot be empty string');
+                  return null;
+                }
+                return (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         );

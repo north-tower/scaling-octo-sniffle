@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { loginSchema, LoginFormData } from '@/lib/validations';
@@ -15,7 +15,8 @@ import { School, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, isLoading, error, clearError } = useAuth();
+  const searchParams = useSearchParams();
+  const { login, isLoading, error, clearError, user } = useAuth();
   const [showPassword, setShowPassword] = React.useState(false);
 
   const {
@@ -29,12 +30,47 @@ export default function LoginPage() {
   const onSubmit = async (data: LoginFormData) => {
     try {
       await login(data);
-      // Redirect will be handled by the auth store
-      router.push('/admin/dashboard'); // Default redirect, will be updated based on role
+      
+      // Get redirect URL from query params or use default based on role
+      const redirectUrl = searchParams.get('redirect');
+      
+      if (redirectUrl) {
+        router.push(redirectUrl);
+      } else {
+        // Will be set after login completes
+        // The redirect will happen in the useEffect below
+      }
     } catch (error) {
       // Error is handled by the auth store
     }
   };
+
+  // Redirect based on user role after successful login
+  React.useEffect(() => {
+    if (user) {
+      const redirectUrl = searchParams.get('redirect');
+      
+      if (redirectUrl) {
+        router.push(redirectUrl);
+      } else {
+        // Default redirect based on role
+        switch (user.role) {
+          case 'admin':
+          case 'accountant':
+            router.push('/admin/dashboard');
+            break;
+          case 'student':
+            router.push('/student/dashboard');
+            break;
+          case 'parent':
+            router.push('/parent/dashboard');
+            break;
+          default:
+            router.push('/admin/dashboard');
+        }
+      }
+    }
+  }, [user, router, searchParams]);
 
   React.useEffect(() => {
     clearError();

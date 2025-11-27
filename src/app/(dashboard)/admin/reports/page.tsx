@@ -1,9 +1,15 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { BarChartComponent } from '@/components/charts/BarChart';
 import { PieChartComponent } from '@/components/charts/PieChart';
 import { LineChartComponent } from '@/components/charts/LineChart';
@@ -15,33 +21,245 @@ import {
   TrendingUp,
   Users,
   DollarSign,
-  AlertTriangle
+  AlertTriangle,
+  Loader2
 } from 'lucide-react';
+import { reportsApi } from '@/lib/api';
+import { useApi } from '@/hooks/useApi';
+import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { FormField } from '@/components/forms/FormField';
+import { Label } from '@/components/ui/label';
 
 export default function ReportsPage() {
-  // Mock data - in real app, this would come from API
-  const monthlyCollectionData = [
-    { name: 'Jan', value: 28000 },
-    { name: 'Feb', value: 32000 },
-    { name: 'Mar', value: 35000 },
-    { name: 'Apr', value: 30000 },
-    { name: 'May', value: 38000 },
-    { name: 'Jun', value: 42000 },
-  ];
+  const [startDate, setStartDate] = useState(() => {
+    const date = new Date();
+    date.setMonth(date.getMonth() - 6);
+    return date.toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState(() => {
+    return new Date().toISOString().split('T')[0];
+  });
+  const [isDateRangeDialogOpen, setIsDateRangeDialogOpen] = useState(false);
+  const [academicYear, setAcademicYear] = useState('');
+  const [selectedClass, setSelectedClass] = useState('');
 
-  const feeTypeData = [
-    { name: 'Tuition', value: 25000, color: '#0088FE' },
-    { name: 'Transport', value: 8000, color: '#00C49F' },
-    { name: 'Library', value: 3000, color: '#FFBB28' },
-    { name: 'Sports', value: 2000, color: '#FF8042' },
-    { name: 'Exam', value: 4000, color: '#8884D8' },
-  ];
+  // Fee Collection Report
+  const { loading: collectionLoading, execute: fetchFeeCollection } = useApi(
+    (params: any) => reportsApi.getFeeCollection(params),
+    {
+      onSuccess: (response: any) => {
+        if (response?.data) {
+          setCollectionData(response.data);
+        } else if (response?.success && response?.data) {
+          setCollectionData(response.data);
+        }
+      },
+      onError: (error) => {
+        console.error('Failed to fetch fee collection:', error);
+        setCollectionData(null);
+      },
+    }
+  );
 
-  const classWiseData = [
-    { name: 'Class 1', data: [{ x: 'Jan', y: 5000 }, { x: 'Feb', y: 5500 }, { x: 'Mar', y: 6000 }] },
-    { name: 'Class 2', data: [{ x: 'Jan', y: 6000 }, { x: 'Feb', y: 6500 }, { x: 'Mar', y: 7000 }] },
-    { name: 'Class 3', data: [{ x: 'Jan', y: 7000 }, { x: 'Feb', y: 7500 }, { x: 'Mar', y: 8000 }] },
-  ];
+  // Outstanding Fees Report
+  const { loading: outstandingLoading, execute: fetchOutstanding } = useApi(
+    (params: any) => reportsApi.getOutstandingFees(params),
+    {
+      onSuccess: (response: any) => {
+        if (response?.data) {
+          setOutstandingData(response.data);
+        } else if (response?.success && response?.data) {
+          setOutstandingData(response.data);
+        }
+      },
+      onError: (error) => {
+        console.error('Failed to fetch outstanding fees:', error);
+        setOutstandingData(null);
+      },
+    }
+  );
+
+  // Defaulters Report
+  const { loading: defaultersLoading, execute: fetchDefaulters } = useApi(
+    (params: any) => reportsApi.getDefaulters(params),
+    {
+      onSuccess: (response: any) => {
+        if (response?.data) {
+          setDefaultersData(response.data);
+        } else if (response?.success && response?.data) {
+          setDefaultersData(response.data);
+        }
+      },
+      onError: (error) => {
+        console.error('Failed to fetch defaulters:', error);
+        setDefaultersData(null);
+      },
+    }
+  );
+
+  // Fetch data on mount and when filters change
+  useEffect(() => {
+    const params: any = {
+      start_date: startDate,
+      end_date: endDate,
+    };
+    if (academicYear) params.academic_year = academicYear;
+    if (selectedClass) params.class = selectedClass;
+
+    fetchFeeCollection(params);
+    fetchOutstanding(params);
+    fetchDefaulters(params);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startDate, endDate, academicYear, selectedClass]);
+
+  // Store fetched data
+  const [collectionData, setCollectionData] = useState<any>(null);
+  const [outstandingData, setOutstandingData] = useState<any>(null);
+  const [defaultersData, setDefaultersData] = useState<any>(null);
+
+  // Transform data for charts
+  const monthlyCollectionData = useMemo(() => {
+    if (!collectionData?.monthlyCollection) return [];
+    
+    return collectionData.monthlyCollection.map((item: any) => {
+      const month = item.month || item.dataValues?.month || 'Unknown';
+      const total = parseFloat(item.total || item.dataValues?.total || 0);
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const monthIndex = typeof month === 'string' && month.includes('-') 
+        ? parseInt(month.split('-')[1]) - 1 
+        : parseInt(month) - 1;
+      
+      return {
+        name: monthNames[monthIndex] || month,
+        value: total,
+      };
+    }).slice(-6); // Last 6 months
+  }, [collectionData]);
+
+  const feeTypeData = useMemo(() => {
+    if (!collectionData?.collectionByFeeType) return [];
+    
+    const colors = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FFC658'];
+    return collectionData.collectionByFeeType.map((item: any, index: number) => {
+      const feeType = item.fee_type || item.dataValues?.fee_type || 'Unknown';
+      const total = parseFloat(item.total || item.dataValues?.total || 0);
+      
+      return {
+        name: feeType.charAt(0).toUpperCase() + feeType.slice(1),
+        value: total,
+        color: colors[index % colors.length],
+      };
+    });
+  }, [collectionData]);
+
+  const classWiseData = useMemo(() => {
+    if (!collectionData?.collectionByClass) return [];
+    
+    return collectionData.collectionByClass.map((item: any) => {
+      const className = item.class || item.dataValues?.class || 'Unknown';
+      const total = parseFloat(item.total || item.dataValues?.total || 0);
+      
+      return {
+        name: `Class ${className}`,
+        data: [{ x: 'Collection', y: total }],
+      };
+    }).slice(0, 6); // First 6 classes
+  }, [collectionData]);
+
+  // Calculate summary statistics
+  const summaryStats = useMemo(() => {
+    const totalCollection = collectionData?.summary?.totalCollection || 0;
+    const totalTransactions = collectionData?.summary?.totalTransactions || 0;
+    const totalOutstanding = outstandingData?.summary?.totalOutstanding || 0;
+    const totalDefaulters = defaultersData?.summary?.totalDefaulters || 0;
+
+    // Calculate collection rate (this would need total expected fees)
+    const collectionRate = totalCollection > 0 
+      ? ((totalCollection / (totalCollection + totalOutstanding)) * 100).toFixed(1)
+      : '0';
+
+    return {
+      totalCollection,
+      totalTransactions,
+      totalOutstanding,
+      totalDefaulters,
+      collectionRate,
+    };
+  }, [collectionData, outstandingData, defaultersData]);
+
+  const handleGenerateReport = async (reportType: string) => {
+    try {
+      const params: any = {
+        start_date: startDate,
+        end_date: endDate,
+      };
+      if (academicYear) params.academic_year = academicYear;
+      if (selectedClass) params.class = selectedClass;
+
+      let response;
+      switch (reportType) {
+        case 'fee-collection':
+          response = await reportsApi.getFeeCollection(params);
+          if (response.success) {
+            setCollectionData(response.data);
+            toast.success('Fee collection report generated');
+          }
+          break;
+        case 'outstanding-fees':
+          response = await reportsApi.getOutstandingFees(params);
+          if (response.success) {
+            setOutstandingData(response.data);
+            toast.success('Outstanding fees report generated');
+          }
+          break;
+        case 'payment-history':
+          toast.info('Payment history is available in the Payments > History page');
+          break;
+        case 'defaulters':
+          response = await reportsApi.getDefaulters(params);
+          if (response.success) {
+            setDefaultersData(response.data);
+            toast.success('Defaulters report generated');
+          }
+          break;
+        default:
+          toast.error('Unknown report type');
+      }
+    } catch (error: any) {
+      console.error('Failed to generate report:', error);
+      toast.error(error?.message || 'Failed to generate report');
+    }
+  };
+
+  const handleExportReport = async (reportType: string, format: string) => {
+    try {
+      const params: any = {
+        start_date: startDate,
+        end_date: endDate,
+      };
+      if (academicYear) params.academic_year = academicYear;
+      if (selectedClass) params.class = selectedClass;
+
+      await reportsApi.exportReport(reportType, params, format);
+      toast.success(`Report exported as ${format.toUpperCase()}`);
+    } catch (error: any) {
+      console.error('Failed to export report:', error);
+      toast.error(error?.message || 'Failed to export report');
+    }
+  };
+
+  const handleApplyDateRange = () => {
+    setIsDateRangeDialogOpen(false);
+    // Data will be refetched automatically via useEffect
+  };
 
   const reportTypes = [
     {
@@ -74,15 +292,7 @@ export default function ReportsPage() {
     },
   ];
 
-  const handleGenerateReport = (reportType: string) => {
-    console.log('Generating report:', reportType);
-    // In real app, this would call the API to generate the report
-  };
-
-  const handleExportReport = (reportType: string, format: string) => {
-    console.log('Exporting report:', reportType, 'as', format);
-    // In real app, this would download the report in the specified format
-  };
+  const loading = collectionLoading || outstandingLoading || defaultersLoading;
 
   return (
     <div className="space-y-6">
@@ -95,14 +305,16 @@ export default function ReportsPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
+          <Button 
+            variant="outline"
+            onClick={() => setIsDateRangeDialogOpen(true)}
+          >
             <Calendar className="mr-2 h-4 w-4" />
             Set Date Range
           </Button>
-          <Button>
-            <Download className="mr-2 h-4 w-4" />
-            Export All Reports
-          </Button>
+          {loading && (
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          )}
         </div>
       </div>
 
@@ -143,8 +355,16 @@ export default function ReportsPage() {
                 size="sm" 
                 className="w-full"
                 onClick={() => handleGenerateReport(report.id)}
+                disabled={loading}
               >
-                Generate Report
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  'Generate Report'
+                )}
               </Button>
             </CardContent>
           </Card>
@@ -152,124 +372,167 @@ export default function ReportsPage() {
       </div>
 
       {/* Charts Section */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <BarChartComponent
-          data={monthlyCollectionData}
-          title="Monthly Collection Trend"
-          description="Fee collection over the past 6 months"
-          height={300}
-        />
-        <PieChartComponent
-          data={feeTypeData}
-          title="Fee Type Distribution"
-          description="Breakdown of collected fees by type"
-          height={300}
-        />
-        <LineChartComponent
-          data={classWiseData}
-          title="Class-wise Collection"
-          description="Collection trends by class"
-          height={300}
-        />
-      </div>
-
-      {/* Summary Statistics */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Collection</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">₹2,45,000</div>
-            <p className="text-xs text-muted-foreground">
-              +12% from last month
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Outstanding Amount</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">₹45,000</div>
-            <p className="text-xs text-muted-foreground">
-              -8% from last month
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Collection Rate</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">84.5%</div>
-            <p className="text-xs text-muted-foreground">
-              +2.1% from last month
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Defaulters</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">45</div>
-            <p className="text-xs text-muted-foreground">
-              -5 from last month
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Recent Reports */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Recent Reports
-          </CardTitle>
-          <CardDescription>
-            Recently generated reports and exports
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {[
-              { name: 'Fee Collection Report - January 2024', type: 'PDF', date: '2024-01-31', size: '2.3 MB' },
-              { name: 'Outstanding Fees Report - January 2024', type: 'Excel', date: '2024-01-30', size: '1.8 MB' },
-              { name: 'Payment History Report - Q4 2023', type: 'CSV', date: '2024-01-29', size: '4.1 MB' },
-            ].map((report, index) => (
-              <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center">
-                    <FileText className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="font-medium">{report.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {report.date} • {report.size}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary">{report.type}</Badge>
-                  <Button variant="ghost" size="sm">
-                    <Download className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <span className="ml-2 text-muted-foreground">Loading report data...</span>
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <BarChartComponent
+              data={monthlyCollectionData}
+              title="Monthly Collection Trend"
+              description="Fee collection over the selected period"
+              height={300}
+            />
+            <PieChartComponent
+              data={feeTypeData}
+              title="Fee Type Distribution"
+              description="Breakdown of collected fees by type"
+              height={300}
+            />
+            <LineChartComponent
+              data={classWiseData}
+              title="Class-wise Collection"
+              description="Collection by class"
+              height={300}
+            />
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Summary Statistics */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Collection</CardTitle>
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">KES {summaryStats.totalCollection.toLocaleString()}</div>
+                <p className="text-xs text-muted-foreground">
+                  {summaryStats.totalTransactions} transactions
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Outstanding Amount</CardTitle>
+                <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">KES {summaryStats.totalOutstanding.toLocaleString()}</div>
+                <p className="text-xs text-muted-foreground">
+                  Pending payments
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Collection Rate</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{summaryStats.collectionRate}%</div>
+                <p className="text-xs text-muted-foreground">
+                  Collection efficiency
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Defaulters</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{summaryStats.totalDefaulters}</div>
+                <p className="text-xs text-muted-foreground">
+                  Students with overdue fees
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
+
+      {/* Date Range Dialog */}
+      <Dialog open={isDateRangeDialogOpen} onOpenChange={setIsDateRangeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Set Date Range</DialogTitle>
+            <DialogDescription>
+              Select the date range for generating reports
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                name="startDate"
+                label="Start Date"
+                type="date"
+                required
+                value={startDate}
+                onChange={(value) => setStartDate(value)}
+              />
+              <FormField
+                name="endDate"
+                label="End Date"
+                type="date"
+                required
+                value={endDate}
+                onChange={(value) => setEndDate(value)}
+              />
+            </div>
+            <FormField
+              name="academicYear"
+              label="Academic Year (Optional)"
+              type="select"
+              placeholder="All Academic Years"
+              value={academicYear || 'all'}
+              onChange={(value) => setAcademicYear(value === 'all' ? '' : value)}
+              options={[
+                { label: 'All Academic Years', value: 'all' },
+                { label: '2023-2024', value: '2023-2024' },
+                { label: '2024-2025', value: '2024-2025' },
+                { label: '2025-2026', value: '2025-2026' },
+              ]}
+            />
+            <FormField
+              name="selectedClass"
+              label="Class (Optional)"
+              type="select"
+              placeholder="All Classes"
+              value={selectedClass || 'all'}
+              onChange={(value) => setSelectedClass(value === 'all' ? '' : value)}
+              options={[
+                { label: 'All Classes', value: 'all' },
+                { label: 'Class 1', value: '1' },
+                { label: 'Class 2', value: '2' },
+                { label: 'Class 3', value: '3' },
+                { label: 'Class 4', value: '4' },
+                { label: 'Class 5', value: '5' },
+                { label: 'Class 6', value: '6' },
+                { label: 'Class 7', value: '7' },
+                { label: 'Class 8', value: '8' },
+                { label: 'Class 9', value: '9' },
+                { label: 'Class 10', value: '10' },
+                { label: 'Class 11', value: '11' },
+                { label: 'Class 12', value: '12' },
+              ]}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDateRangeDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleApplyDateRange}>
+              Apply
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
-

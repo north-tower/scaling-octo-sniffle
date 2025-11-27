@@ -2,6 +2,20 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } f
 import { toast } from 'sonner';
 import { ApiResponse, ApiError, AuthUser } from './types';
 
+// Check if backend is available
+export const checkBackendConnection = async (): Promise<boolean> => {
+  try {
+    // Try to ping the backend - adjust endpoint based on your backend
+    const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}`.replace('/api', ''), {
+      timeout: 5000,
+    });
+    return response.status === 200;
+  } catch (error) {
+    console.error('Backend connection failed:', error);
+    return false;
+  }
+};
+
 // API Configuration
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 const API_TIMEOUT = 30000; // 30 seconds
@@ -182,8 +196,29 @@ export const api = {
 
 // Authentication API
 export const authApi = {
-  login: async (email: string, password: string): Promise<ApiResponse<AuthUser>> => {
-    return api.post('/auth/login', { email, password });
+  login: async (email: string, password: string): Promise<ApiResponse<{ user: AuthUser; token: string; refreshToken?: string }>> => {
+    const response = await api.post('/auth/login', { email, password });
+    // Transform backend response to match our AuthUser type
+    if (response.success && response.data) {
+      const { user, token, refreshToken } = response.data as any;
+      return {
+        success: true,
+        data: {
+          user: {
+            ...user,
+            token,
+            refreshToken: refreshToken || token,
+          },
+          token,
+          refreshToken: refreshToken || token,
+        },
+      };
+    }
+    return response;
+  },
+
+  register: async (userData: any): Promise<ApiResponse<{ user: AuthUser; token: string }>> => {
+    return api.post('/auth/register', userData);
   },
 
   logout: async (): Promise<ApiResponse<void>> => {
@@ -316,7 +351,16 @@ export const feeStructuresApi = {
   },
 
   assignToStudents: async (data: any): Promise<ApiResponse<any>> => {
-    return api.post('/fee-structures/assign', data);
+    const { id, ...assignData } = data;
+    return api.post(`/fee-structures/${id}/assign`, assignData);
+  },
+
+  getAssignments: async (params?: any): Promise<ApiResponse<any>> => {
+    return api.get('/fee-structures/assignments', { params });
+  },
+
+  waiveAssignment: async (id: string, reason?: string): Promise<ApiResponse<any>> => {
+    return api.put(`/fee-structures/assignments/${id}/waive`, { reason });
   },
 };
 
@@ -374,11 +418,19 @@ export const paymentsApi = {
   },
 
   getReceipt: async (id: string): Promise<void> => {
-    return api.download(`/payments/${id}/receipt`);
+    return api.download(`/payments/receipt/${id}`);
   },
 
   generateReceipt: async (id: string): Promise<ApiResponse<any>> => {
-    return api.post(`/payments/${id}/receipt`);
+    return api.get(`/payments/receipt/${id}`);
+  },
+
+  voidPayment: async (id: string, reason?: string): Promise<ApiResponse<any>> => {
+    return api.put(`/payments/${id}/void`, { reason });
+  },
+
+  getStats: async (params?: any): Promise<ApiResponse<any>> => {
+    return api.get('/payments/stats', { params });
   },
 
   bulkImport: async (file: File): Promise<ApiResponse<any>> => {
@@ -469,16 +521,63 @@ export const dashboardApi = {
     return api.get('/dashboard/stats');
   },
 
-  getRecentActivities: async (): Promise<ApiResponse<any>> => {
-    return api.get('/dashboard/activities');
+  getRecentPayments: async (): Promise<ApiResponse<any>> => {
+    return api.get('/dashboard/recent-payments');
   },
 
   getUpcomingDues: async (): Promise<ApiResponse<any>> => {
     return api.get('/dashboard/upcoming-dues');
   },
 
+  getCollectionTrends: async (): Promise<ApiResponse<any>> => {
+    return api.get('/dashboard/collection-trends');
+  },
+
+  getRecentActivities: async (): Promise<ApiResponse<any>> => {
+    return api.get('/dashboard/alerts');
+  },
+
   getMonthlyCollection: async (): Promise<ApiResponse<any>> => {
-    return api.get('/dashboard/monthly-collection');
+    return api.get('/dashboard/collection-trends');
+  },
+
+  getAlerts: async (): Promise<ApiResponse<any>> => {
+    return api.get('/dashboard/alerts');
+  },
+};
+
+// Parent Portal API
+export const parentPortalApi = {
+  getSummary: async (): Promise<ApiResponse<any>> => {
+    return api.get('/parent/summary');
+  },
+
+  getChildren: async (): Promise<ApiResponse<any>> => {
+    return api.get('/parent/children');
+  },
+
+  getChildProfile: async (childId: string): Promise<ApiResponse<any>> => {
+    return api.get(`/parent/children/${childId}`);
+  },
+
+  getChildFees: async (childId: string, params?: any): Promise<ApiResponse<any>> => {
+    return api.get(`/parent/children/${childId}/fees`, { params });
+  },
+
+  getChildPayments: async (childId: string, params?: any): Promise<ApiResponse<any>> => {
+    return api.get(`/parent/children/${childId}/payments`, { params });
+  },
+
+  getChildBalance: async (childId: string, params?: any): Promise<ApiResponse<any>> => {
+    return api.get(`/parent/children/${childId}/balance`, { params });
+  },
+
+  getChildStats: async (childId: string): Promise<ApiResponse<any>> => {
+    return api.get(`/parent/children/${childId}/stats`);
+  },
+
+  getChildReceipt: async (childId: string, paymentId: string): Promise<ApiResponse<any>> => {
+    return api.get(`/parent/children/${childId}/receipt/${paymentId}`);
   },
 };
 

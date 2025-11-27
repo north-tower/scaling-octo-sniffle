@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { AuthState, AuthUser, LoginFormData } from '@/lib/types';
 import { authApi } from '@/lib/api';
 import { toast } from 'sonner';
+import { cookies } from '@/lib/cookies';
 
 interface AuthStore extends AuthState {
   // Actions
@@ -31,14 +32,25 @@ export const useAuthStore = create<AuthStore>()(
           const response = await authApi.login(credentials.email, credentials.password);
           
           if (response.success && response.data) {
-            const user = response.data;
+            const { user, token, refreshToken } = response.data;
             
-            // Store tokens
-            localStorage.setItem('authToken', user.token);
-            localStorage.setItem('refreshToken', user.refreshToken);
+            // Create AuthUser object with token
+            const authUser: AuthUser = {
+              ...user,
+              token,
+              refreshToken: refreshToken || token,
+            };
+            
+            // Store tokens in localStorage
+            localStorage.setItem('authToken', token);
+            localStorage.setItem('refreshToken', refreshToken || token);
+            localStorage.setItem('user', JSON.stringify(authUser));
+            
+            // Also set cookie for middleware (7 days)
+            cookies.set('authToken', token, 7);
             
             set({
-              user,
+              user: authUser,
               isAuthenticated: true,
               isLoading: false,
               error: null,
@@ -73,6 +85,10 @@ export const useAuthStore = create<AuthStore>()(
           // Clear local storage and state
           localStorage.removeItem('authToken');
           localStorage.removeItem('refreshToken');
+          localStorage.removeItem('user');
+          
+          // Clear cookie
+          cookies.delete('authToken');
           
           set({
             user: null,

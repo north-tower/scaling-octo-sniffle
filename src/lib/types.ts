@@ -329,6 +329,19 @@ export type LoginForm = {
   password: string;
 };
 
+export type LoginFormData = {
+  email: string;
+  password: string;
+};
+
+export type RegisterFormData = {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  role: UserRole;
+};
+
 export type AuthUser = {
   id: string;
   email: string;
@@ -338,7 +351,7 @@ export type AuthUser = {
   avatar?: string;
   token: string;
   refreshToken: string;
-  expiresAt: Date;
+  expiresAt?: Date;
 };
 
 export type AuthState = {
