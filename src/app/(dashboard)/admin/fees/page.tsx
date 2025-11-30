@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/tables/DataTable';
 import { Button } from '@/components/ui/button';
@@ -13,8 +13,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Eye, Edit, Trash2, Plus, BookOpen, Loader2, Search, AlertCircle, DollarSign } from 'lucide-react';
-import { FeeStructure, CreateFeeStructureForm } from '@/lib/types';
+import { MoreHorizontal, Eye, Edit, Trash2, Plus, BookOpen, Loader2, Search, AlertCircle } from 'lucide-react';
+import { FeeStructure, CreateFeeStructureForm, BackendFeeStructure } from '@/lib/types';
 import { feeStructuresApi } from '@/lib/api';
 import { useApi } from '@/hooks/useApi';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -35,7 +35,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 // Transform backend fee structure data to frontend format
-const transformFeeStructure = (backendFee: any): FeeStructure => {
+const transformFeeStructure = (backendFee: BackendFeeStructure): FeeStructure => {
   return {
     id: backendFee.id?.toString() || '',
     name: backendFee.name || `${backendFee.fee_type || ''} - Class ${backendFee.class || ''}`,
@@ -58,10 +58,15 @@ const transformFeeStructure = (backendFee: any): FeeStructure => {
 export default function FeeStructuresPage() {
   const router = useRouter();
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
+  const [limit] = useState(10);
   const [search, setSearch] = useState('');
   const [feeStructures, setFeeStructures] = useState<FeeStructure[]>([]);
-  const [pagination, setPagination] = useState<any>(null);
+  const [pagination, setPagination] = useState<{
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  } | null>(null);
   const [localSearch, setLocalSearch] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -110,26 +115,48 @@ export default function FeeStructuresPage() {
   const debouncedSearch = useDebounce(search, 500);
 
   // Fetch fee structures
-  const { loading, execute: fetchFeeStructures } = useApi(
-    (params: any) => feeStructuresApi.getAll(params),
-    {
-      onSuccess: (response: any) => {
-        // Handle different response structures
-        let feeStructuresData = [];
-        let paginationData = null;
+  type FeeStructuresResponse = {
+    feeStructures: BackendFeeStructure[];
+    pagination?: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
+  } | {
+    data: {
+      feeStructures: BackendFeeStructure[];
+      pagination?: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+      };
+    };
+  } | {
+    data: BackendFeeStructure[];
+  } | BackendFeeStructure[];
 
-        if (response?.feeStructures) {
+  const { loading, execute: fetchFeeStructures } = useApi<FeeStructuresResponse>(
+    (params: { page?: number; limit?: number; search?: string }) => feeStructuresApi.getAll(params),
+    {
+      onSuccess: (response) => {
+        // Handle different response structures
+        let feeStructuresData: BackendFeeStructure[] = [];
+        let paginationData: { page: number; limit: number; total: number; totalPages: number } | null = null;
+
+        if (response && typeof response === 'object' && 'feeStructures' in response && Array.isArray(response.feeStructures)) {
           feeStructuresData = response.feeStructures;
-          paginationData = response.pagination;
-        } else if (response?.data) {
+          paginationData = response.pagination || null;
+        } else if (response && typeof response === 'object' && 'data' in response) {
           if (Array.isArray(response.data)) {
             feeStructuresData = response.data;
-          } else if (response.data.feeStructures) {
+          } else if (response.data && typeof response.data === 'object' && 'feeStructures' in response.data && Array.isArray(response.data.feeStructures)) {
             feeStructuresData = response.data.feeStructures;
-            paginationData = response.data.pagination;
-          } else if (response.data.data) {
+            paginationData = response.data.pagination || null;
+          } else if (response.data && typeof response.data === 'object' && 'data' in response.data && Array.isArray(response.data.data)) {
             feeStructuresData = response.data.data;
-            paginationData = response.data.pagination;
+            paginationData = response.data.pagination || null;
           }
         } else if (Array.isArray(response)) {
           feeStructuresData = response;
@@ -164,22 +191,23 @@ export default function FeeStructuresPage() {
     setPage(1); // Reset to first page on new search
   };
 
-  const handleDelete = async (feeStructureId: string) => {
+  const handleDelete = useCallback(async (feeStructureId: string) => {
     if (confirm('Are you sure you want to delete this fee structure?')) {
       try {
         await feeStructuresApi.delete(feeStructureId);
         toast.success('Fee structure deleted successfully');
         // Refresh the list
         fetchFeeStructures({ page, limit, search: debouncedSearch });
-      } catch (error: any) {
+      } catch (error) {
         console.error('Failed to delete fee structure:', error);
-        toast.error(error?.message || 'Failed to delete fee structure');
+        const errorMessage = error instanceof Error ? error.message : 'Failed to delete fee structure';
+        toast.error(errorMessage);
       }
     }
-  };
+  }, [fetchFeeStructures, page, limit, debouncedSearch]);
 
   // Handle form field changes
-  const handleFieldChange = (field: keyof CreateFeeStructureForm, value: any) => {
+  const handleFieldChange = (field: keyof CreateFeeStructureForm, value: string | number | boolean | Date | undefined) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     // Clear error for this field when user starts typing
     if (formErrors[field]) {
@@ -210,7 +238,19 @@ export default function FeeStructuresPage() {
 
     try {
       // Transform to backend format
-      const backendData: any = {
+      const backendData: {
+        class: string;
+        fee_type: string;
+        amount: string;
+        academic_year: string;
+        due_date: string | Date;
+        description: string | null;
+        late_fee_amount: string | null;
+        late_fee_days: number | null;
+        is_recurring: boolean;
+        recurring_interval: string | null;
+        is_active: boolean;
+      } = {
         class: formData.classId,
         fee_type: formData.feeType || 'tuition',
         amount: formData.amount?.toString() || '0',
@@ -232,12 +272,13 @@ export default function FeeStructuresPage() {
         resetForm();
         fetchFeeStructures({ page, limit, search: debouncedSearch });
       }
-    } catch (error: any) {
-      if (error.details) {
-        setFormErrors(error.details);
-        toast.error(error.message || 'Failed to create fee structure');
+    } catch (error) {
+      const apiError = error as { details?: Record<string, string>; message?: string };
+      if (apiError.details) {
+        setFormErrors(apiError.details);
+        toast.error(apiError.message || 'Failed to create fee structure');
       } else {
-        toast.error(error.message || 'Failed to create fee structure');
+        toast.error(apiError.message || 'Failed to create fee structure');
       }
     } finally {
       setSubmitting(false);
@@ -265,7 +306,19 @@ export default function FeeStructuresPage() {
 
     try {
       // Transform to backend format
-      const backendData: any = {
+      const backendData: {
+        class: string;
+        fee_type: string;
+        amount: string;
+        academic_year: string;
+        due_date: string | Date;
+        description: string | null;
+        late_fee_amount: string | null;
+        late_fee_days: number | null;
+        is_recurring: boolean;
+        recurring_interval: string | null;
+        is_active: boolean;
+      } = {
         class: formData.classId,
         fee_type: formData.feeType || 'tuition',
         amount: formData.amount?.toString() || '0',
@@ -288,12 +341,13 @@ export default function FeeStructuresPage() {
         setSelectedFeeStructure(null);
         fetchFeeStructures({ page, limit, search: debouncedSearch });
       }
-    } catch (error: any) {
-      if (error.details) {
-        setFormErrors(error.details);
-        toast.error(error.message || 'Failed to update fee structure');
+    } catch (error) {
+      const apiError = error as { details?: Record<string, string>; message?: string };
+      if (apiError.details) {
+        setFormErrors(apiError.details);
+        toast.error(apiError.message || 'Failed to update fee structure');
       } else {
-        toast.error(error.message || 'Failed to update fee structure');
+        toast.error(apiError.message || 'Failed to update fee structure');
       }
     } finally {
       setSubmitting(false);
@@ -373,7 +427,7 @@ export default function FeeStructuresPage() {
     setAssigning(true);
 
     try {
-      const assignData: any = {};
+      const assignData: { class?: string; student_ids?: string[] } = {};
       
       if (assignClass) {
         assignData.class = assignClass;
@@ -394,9 +448,10 @@ export default function FeeStructuresPage() {
         setAssignStudentIds('');
         fetchFeeStructures({ page, limit, search: debouncedSearch });
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to assign fee structure:', error);
-      toast.error(error?.message || 'Failed to assign fee structure');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to assign fee structure';
+      toast.error(errorMessage);
     } finally {
       setAssigning(false);
     }
@@ -567,7 +622,7 @@ export default function FeeStructuresPage() {
         );
       },
     },
-  ], []);
+  ], [handleDelete]);
 
   return (
     <div className="space-y-6">
