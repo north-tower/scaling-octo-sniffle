@@ -14,18 +14,9 @@ import {
   User, 
   Bell, 
   Monitor, 
-  Globe,
   Save,
   Loader2,
-  Building2,
-  Mail,
-  Phone,
-  MapPin,
-  DollarSign,
-  Clock,
-  Calendar,
-  Receipt,
-  AlertCircle
+  Building2
 } from 'lucide-react';
 import { settingsApi } from '@/lib/api';
 import { useApi } from '@/hooks/useApi';
@@ -100,12 +91,58 @@ export default function SettingsPage() {
   ];
 
   // Fetch app settings
-  const { loading: appLoading, execute: fetchAppSettings } = useApi(
+  type AppSettingsResponse = {
+    data: {
+      school_name?: string;
+      schoolName?: string;
+      school_logo?: string;
+      schoolLogo?: string;
+      school_address?: string;
+      schoolAddress?: string;
+      school_phone?: string;
+      schoolPhone?: string;
+      school_email?: string;
+      schoolEmail?: string;
+      currency?: string;
+      timezone?: string;
+      academic_year?: string;
+      academicYear?: string;
+      late_fee_percentage?: number;
+      lateFeePercentage?: number;
+      receipt_prefix?: string;
+      receiptPrefix?: string;
+      auto_generate_receipts?: boolean;
+      autoGenerateReceipts?: boolean;
+    };
+  } | {
+    school_name?: string;
+    schoolName?: string;
+    school_logo?: string;
+    schoolLogo?: string;
+    school_address?: string;
+    schoolAddress?: string;
+    school_phone?: string;
+    schoolPhone?: string;
+    school_email?: string;
+    schoolEmail?: string;
+    currency?: string;
+    timezone?: string;
+    academic_year?: string;
+    academicYear?: string;
+    late_fee_percentage?: number;
+    lateFeePercentage?: number;
+    receipt_prefix?: string;
+    receiptPrefix?: string;
+    auto_generate_receipts?: boolean;
+    autoGenerateReceipts?: boolean;
+  };
+
+  const { loading: appLoading, execute: fetchAppSettings } = useApi<AppSettingsResponse>(
     () => settingsApi.getAppSettings(),
     {
-      onSuccess: (response: any) => {
-        const data = response?.data || response;
-        if (data) {
+      onSuccess: (response) => {
+        const data = response && typeof response === 'object' && 'data' in response ? response.data : response;
+        if (data && typeof data === 'object') {
           setAppSettings({
             schoolName: data.school_name || data.schoolName || '',
             schoolLogo: data.school_logo || data.schoolLogo || '',
@@ -128,14 +165,46 @@ export default function SettingsPage() {
   );
 
   // Fetch user settings
-  const { loading: userLoading, execute: fetchUserSettings } = useApi(
+  type UserSettingsResponse = {
+    data: {
+      theme?: string;
+      language?: string;
+      notifications?: {
+        email?: boolean;
+        sms?: boolean;
+        push?: boolean;
+      };
+      dashboard?: {
+        default_view?: string;
+        defaultView?: string;
+        refresh_interval?: number;
+        refreshInterval?: number;
+      };
+    };
+  } | {
+    theme?: string;
+    language?: string;
+    notifications?: {
+      email?: boolean;
+      sms?: boolean;
+      push?: boolean;
+    };
+    dashboard?: {
+      default_view?: string;
+      defaultView?: string;
+      refresh_interval?: number;
+      refreshInterval?: number;
+    };
+  };
+
+  const { loading: userLoading, execute: fetchUserSettings } = useApi<UserSettingsResponse>(
     () => settingsApi.getUserSettings(),
     {
-      onSuccess: (response: any) => {
-        const data = response?.data || response;
-        if (data) {
+      onSuccess: (response) => {
+        const data = response && typeof response === 'object' && 'data' in response ? response.data : response;
+        if (data && typeof data === 'object') {
           setUserSettings({
-            theme: data.theme || 'system',
+            theme: (data.theme as 'light' | 'dark' | 'system') || 'system',
             language: data.language || 'en',
             notifications: {
               email: data.notifications?.email !== false,
@@ -143,7 +212,7 @@ export default function SettingsPage() {
               push: data.notifications?.push !== false,
             },
             dashboard: {
-              defaultView: data.dashboard?.default_view || data.dashboard?.defaultView || 'overview',
+              defaultView: (data.dashboard?.default_view || data.dashboard?.defaultView || 'overview') as 'overview' | 'detailed',
               refreshInterval: data.dashboard?.refresh_interval || data.dashboard?.refreshInterval || 60,
             },
           });
@@ -156,29 +225,59 @@ export default function SettingsPage() {
   );
 
   // Update app settings
+  type AppSettingsPayload = {
+    school_name?: string;
+    school_logo?: string;
+    school_address?: string;
+    school_phone?: string;
+    school_email?: string;
+    currency?: string;
+    timezone?: string;
+    academic_year?: string;
+    late_fee_percentage?: number;
+    receipt_prefix?: string;
+    auto_generate_receipts?: boolean;
+  };
+
   const { execute: updateAppSettings } = useApi(
-    (data: any) => settingsApi.updateAppSettings(data),
+    (data: AppSettingsPayload) => settingsApi.updateAppSettings(data),
     {
       onSuccess: () => {
         toast.success('App settings updated successfully');
         setAppFormErrors({});
       },
-      onError: (error: any) => {
-        toast.error(error?.message || 'Failed to update app settings');
+      onError: (error) => {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to update app settings';
+        toast.error(errorMessage);
       },
     }
   );
 
   // Update user settings
+  type UserSettingsPayload = {
+    theme?: string;
+    language?: string;
+    notifications?: {
+      email?: boolean;
+      sms?: boolean;
+      push?: boolean;
+    };
+    dashboard?: {
+      default_view?: string;
+      refresh_interval?: number;
+    };
+  };
+
   const { execute: updateUserSettings } = useApi(
-    (data: any) => settingsApi.updateUserSettings(data),
+    (data: UserSettingsPayload) => settingsApi.updateUserSettings(data),
     {
       onSuccess: () => {
         toast.success('User settings updated successfully');
         setUserFormErrors({});
       },
-      onError: (error: any) => {
-        toast.error(error?.message || 'Failed to update user settings');
+      onError: (error) => {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to update user settings';
+        toast.error(errorMessage);
       },
     }
   );
