@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { 
   ArrowLeft,
@@ -11,19 +10,38 @@ import {
   Download,
   Printer,
   CheckCircle,
-  Calendar,
-  DollarSign,
   FileText,
   User,
-  GraduationCap,
   CreditCard
 } from 'lucide-react';
 import { parentPortalApi } from '@/lib/api';
-import { useApi } from '@/hooks/useApi';
 import { formatCurrency } from '@/lib/utils';
 import { format } from 'date-fns';
 import { useRouter, useParams } from 'next/navigation';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { BackendPayment, BackendFeeStructure } from '@/lib/types';
+
+interface ChildData {
+  id?: string;
+  name?: string;
+  first_name?: string;
+  last_name?: string;
+  student_id?: string;
+  class?: string;
+  section?: string;
+  roll_number?: string;
+}
+
+interface ReceiptData {
+  payment: BackendPayment & {
+    feeStructure?: BackendFeeStructure;
+    receivedBy?: {
+      username?: string;
+      email?: string;
+    };
+  };
+  child: ChildData;
+}
 
 export default function ReceiptPage() {
   const router = useRouter();
@@ -31,7 +49,7 @@ export default function ReceiptPage() {
   const childId = params?.childId as string;
   const paymentId = params?.paymentId as string;
   
-  const [receiptData, setReceiptData] = useState<any>(null);
+  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Fetch receipt data
@@ -42,8 +60,8 @@ export default function ReceiptPage() {
       try {
         setLoading(true);
         const response = await parentPortalApi.getChildReceipt(childId, paymentId);
-        const data = response?.data || response;
-        if (data) {
+        const data = (response && typeof response === 'object' && 'data' in response ? response.data : response) as ReceiptData | null;
+        if (data && typeof data === 'object' && 'payment' in data) {
           setReceiptData(data);
         }
       } catch (error) {
