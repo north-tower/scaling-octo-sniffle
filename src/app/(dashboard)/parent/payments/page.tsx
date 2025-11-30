@@ -19,8 +19,6 @@ import {
   Loader2,
   CheckCircle,
   Calendar,
-  DollarSign,
-  GraduationCap,
   Filter,
   Eye,
   Download,
@@ -34,14 +32,79 @@ import { format } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { useDebounce } from '@/hooks/useDebounce';
+import { BackendPayment, BackendFeeStructure, ApiResponse } from '@/lib/types';
+
+interface ChildWithBalance {
+  id: string;
+  name?: string;
+  first_name?: string;
+  last_name?: string;
+  student_id?: string;
+  class?: string;
+  section?: string;
+  roll_number?: string;
+  outstandingBalance?: number;
+  overdueCount?: number;
+}
+
+interface PaymentWithChild extends BackendPayment {
+  childId?: string;
+  childName?: string;
+  childClass?: string;
+  childSection?: string;
+  feeStructure?: BackendFeeStructure;
+  receivedBy?: {
+    username?: string;
+    email?: string;
+  };
+}
+
+interface PaymentQueryParams {
+  page?: number;
+  limit?: number;
+  start_date?: string;
+  end_date?: string;
+  academic_year?: string;
+}
+
+interface PaginationData {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  itemsPerPage: number;
+}
+
+interface PaymentSummary {
+  totalAmount: number;
+  totalCount: number;
+  byMethod: Record<string, { count: number; amount: number }>;
+}
+
+type SummaryResponse = {
+  data: {
+    children: ChildWithBalance[];
+  };
+} | {
+  children: ChildWithBalance[];
+} | ChildWithBalance[];
+
+type PaymentsResponse = {
+  data: {
+    payments: PaymentWithChild[];
+    pagination?: PaginationData;
+  };
+} | {
+  payments: PaymentWithChild[];
+  pagination?: PaginationData;
+} | PaymentWithChild[];
 
 export default function ParentPaymentsPage() {
   const router = useRouter();
-  const [children, setChildren] = useState<any[]>([]);
+  const [children, setChildren] = useState<ChildWithBalance[]>([]);
   const [selectedChildId, setSelectedChildId] = useState<string>('all');
-  const [payments, setPayments] = useState<any[]>([]);
-  const [filteredPayments, setFilteredPayments] = useState<any[]>([]);
-  const [pagination, setPagination] = useState<any>(null);
+  const [payments, setPayments] = useState<PaymentWithChild[]>([]);
+  const [filteredPayments, setFilteredPayments] = useState<PaymentWithChild[]>([]);
+  const [pagination, setPagination] = useState<PaginationData | null>(null);
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
   const [localSearch, setLocalSearch] = useState('');
@@ -52,13 +115,18 @@ export default function ParentPaymentsPage() {
   const debouncedSearch = useDebounce(search, 500);
 
   // Fetch children
-  const { loading: childrenLoading, execute: fetchChildren } = useApi(
+  const { loading: childrenLoading, execute: fetchChildren } = useApi<ChildWithBalance[]>(
     () => parentPortalApi.getSummary(),
     {
-      onSuccess: (response: any) => {
-        const data = response?.data || response;
-        if (data) {
-          const childrenList = data.children || [];
+      onSuccess: (response) => {
+        const data = response && typeof response === 'object' && 'data' in response ? response.data : response;
+        if (data && typeof data === 'object') {
+          let childrenList: ChildWithBalance[] = [];
+          if (Array.isArray(data)) {
+            childrenList = data;
+          } else if ('children' in data && Array.isArray(data.children)) {
+            childrenList = data.children;
+          }
           setChildren(childrenList);
           // Auto-select first child if available
           if (childrenList.length > 0 && selectedChildId === 'all') {
@@ -74,30 +142,35 @@ export default function ParentPaymentsPage() {
   );
 
   // Fetch payments for selected child
-  const { loading: paymentsLoading, execute: fetchPayments } = useApi(
-    async (childId: string, params?: any) => {
+  const { loading: paymentsLoading, execute: fetchPayments } = useApi<PaymentWithChild[]>(
+    async (...args: unknown[]): Promise<ApiResponse<PaymentWithChild[]>> => {
+      const childId = args[0] as string;
+      const params = args[1] as PaymentQueryParams | undefined;
       if (childId === 'all') {
         // Fetch payments for all children
-        const promises = children.map((child: any) =>
+        const promises = children.map((child) =>
           parentPortalApi.getChildPayments(child.id, { ...params, limit: 100 }).catch(() => null)
         );
         const results = await Promise.all(promises);
-        const allPayments = results
-          .flatMap((result: any, index: number) => {
-            if (!result?.data) return [];
+        const allPayments: PaymentWithChild[] = results
+          .flatMap((result, index) => {
+            if (!result || typeof result !== 'object' || !('data' in result)) return [];
             const child = children[index];
-            const payments = result.data.payments || [];
-            return payments.map((payment: any) => ({
+            const resultData = result.data;
+            const payments = (resultData && typeof resultData === 'object' && 'payments' in resultData && Array.isArray(resultData.payments))
+              ? resultData.payments
+              : [];
+            return payments.map((payment: BackendPayment) => ({
               ...payment,
               childId: child.id,
               childName: child.name || `${child.first_name || ''} ${child.last_name || ''}`.trim(),
               childClass: child.class,
               childSection: child.section,
-            }));
+            })) as PaymentWithChild[];
           })
-          .sort((a: any, b: any) => {
-            const dateA = new Date(a.payment_date || a.created_at || 0);
-            const dateB = new Date(b.payment_date || b.created_at || 0);
+          .sort((a, b) => {
+            const dateA = new Date(a.payment_date || a.created_at || '0');
+            const dateB = new Date(b.payment_date || b.created_at || '0');
             return dateB.getTime() - dateA.getTime();
           });
         
@@ -106,32 +179,38 @@ export default function ParentPaymentsPage() {
         const endIndex = startIndex + limit;
         const paginatedPayments = allPayments.slice(startIndex, endIndex);
         
+        // Set pagination for "all children" case
+        setPagination({
+          currentPage: page,
+          totalPages: Math.ceil(allPayments.length / limit),
+          totalItems: allPayments.length,
+          itemsPerPage: limit,
+        });
+        
         return {
           success: true,
-          data: {
-            payments: paginatedPayments,
-            pagination: {
-              currentPage: page,
-              totalPages: Math.ceil(allPayments.length / limit),
-              totalItems: allPayments.length,
-              itemsPerPage: limit,
-            },
-          },
+          data: paginatedPayments,
         };
       } else {
-        return parentPortalApi.getChildPayments(childId, { ...params, page, limit });
+        const response = await parentPortalApi.getChildPayments(childId, { ...params, page, limit });
+        const data = response && typeof response === 'object' && 'data' in response ? response.data : response;
+        const paymentsList = (data && typeof data === 'object' && 'payments' in data && Array.isArray(data.payments))
+          ? data.payments
+          : [];
+        
+        // Set pagination from API response for single child
+        if (data && typeof data === 'object' && 'pagination' in data && data.pagination) {
+          setPagination(data.pagination as PaginationData);
+        } else {
+          setPagination(null);
+        }
+        
+        return { success: true, data: paymentsList };
       }
     },
     {
-      onSuccess: (response: any) => {
-        const data = response?.data || response;
-        if (data) {
-          const paymentsList = data.payments || [];
-          setPayments(paymentsList);
-          if (data.pagination) {
-            setPagination(data.pagination);
-          }
-        }
+      onSuccess: (paymentsList) => {
+        setPayments(paymentsList || []);
       },
       onError: (error) => {
         console.error('Failed to fetch payments:', error);
@@ -148,7 +227,7 @@ export default function ParentPaymentsPage() {
 
   useEffect(() => {
     if (selectedChildId && children.length > 0) {
-      const params: any = { page, limit };
+      const params: PaymentQueryParams = { page, limit };
       if (startDate) {
         params.start_date = startDate;
       }
@@ -170,7 +249,7 @@ export default function ParentPaymentsPage() {
     // Search filter
     if (debouncedSearch) {
       const searchLower = debouncedSearch.toLowerCase();
-      filtered = filtered.filter((payment: any) => {
+      filtered = filtered.filter((payment) => {
         const receiptNumber = (payment.receipt_number || '').toLowerCase();
         const transactionId = (payment.transaction_id || '').toLowerCase();
         const paymentMethod = (payment.payment_method || '').toLowerCase();
@@ -200,15 +279,15 @@ export default function ParentPaymentsPage() {
   const academicYears = Array.from(
     new Set(
       payments
-        .map((payment: any) => payment.feeStructure?.academic_year)
-        .filter((year: any) => year)
+        .map((payment) => payment.feeStructure?.academic_year)
+        .filter((year): year is string => Boolean(year))
     )
   ).sort();
 
   // Calculate summary statistics
   const summary = payments.reduce(
-    (acc: any, payment: any) => {
-      const amount = parseFloat(payment.amount_paid || 0);
+    (acc: PaymentSummary, payment) => {
+      const amount = parseFloat(payment.amount_paid || '0');
       acc.totalAmount += amount;
       acc.totalCount += 1;
       
@@ -229,7 +308,7 @@ export default function ParentPaymentsPage() {
     }
   );
 
-  const handleViewReceipt = (payment: any) => {
+  const handleViewReceipt = (payment: PaymentWithChild) => {
     if (payment.childId && payment.id) {
       router.push(`/parent/children/${payment.childId}/receipt/${payment.id}`);
     }
@@ -268,7 +347,7 @@ export default function ParentPaymentsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Children</SelectItem>
-                  {children.map((child: any) => (
+                  {children.map((child) => (
                     <SelectItem key={child.id} value={child.id}>
                       {child.name || `${child.first_name || ''} ${child.last_name || ''}`.trim()}
                     </SelectItem>
@@ -315,7 +394,7 @@ export default function ParentPaymentsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Years</SelectItem>
-                  {academicYears.map((year: any) => (
+                  {academicYears.map((year) => (
                     <SelectItem key={year} value={year}>
                       {year}
                     </SelectItem>
@@ -354,7 +433,7 @@ export default function ParentPaymentsPage() {
             </CardContent>
           </Card>
 
-          {Object.entries(summary.byMethod).slice(0, 3).map(([method, data]: [string, any]) => (
+          {Object.entries(summary.byMethod).slice(0, 3).map(([method, data]) => (
             <Card key={method}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium capitalize">{method}</CardTitle>
@@ -379,7 +458,7 @@ export default function ParentPaymentsPage() {
           <CardDescription>
             {selectedChildId === 'all' 
               ? 'Payments for all your children' 
-              : `Payments for ${children.find((c: any) => c.id === selectedChildId)?.name || 'selected child'}`}
+              : `Payments for ${children.find((c) => c.id === selectedChildId)?.name || 'selected child'}`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -400,13 +479,13 @@ export default function ParentPaymentsPage() {
           ) : (
             <>
               <div className="space-y-4">
-                {filteredPayments.map((payment: any) => {
+                {filteredPayments.map((payment) => {
                   const paymentDate = payment.payment_date 
                     ? new Date(payment.payment_date) 
                     : payment.created_at 
                     ? new Date(payment.created_at)
                     : null;
-                  const feeStructure = payment.feeStructure || {};
+                  const feeStructure = payment.feeStructure;
 
                   return (
                     <div
@@ -441,8 +520,8 @@ export default function ParentPaymentsPage() {
                               )}
                             </div>
                             <p className="text-sm text-muted-foreground mt-1">
-                              {feeStructure.fee_type || 'Fee Payment'}
-                              {feeStructure.academic_year && ` • ${feeStructure.academic_year}`}
+                              {feeStructure?.fee_type || 'Fee Payment'}
+                              {feeStructure?.academic_year && ` • ${feeStructure.academic_year}`}
                             </p>
                           </div>
                         </div>

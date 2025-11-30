@@ -79,22 +79,6 @@ interface SummaryStats {
   overdueCount: number;
 }
 
-type SummaryResponse = {
-  data: {
-    children: ChildWithBalance[];
-  };
-} | {
-  children: ChildWithBalance[];
-} | ChildWithBalance[];
-
-type FeesResponse = {
-  data: {
-    fees: FeeAssignmentWithChild[];
-  };
-} | {
-  fees: FeeAssignmentWithChild[];
-} | FeeAssignmentWithChild[];
-
 export default function ParentFeesPage() {
   const router = useRouter();
   const [children, setChildren] = useState<ChildWithBalance[]>([]);
