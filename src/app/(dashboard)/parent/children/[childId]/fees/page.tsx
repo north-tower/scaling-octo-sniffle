@@ -34,15 +34,34 @@ import { useRouter, useParams } from 'next/navigation';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { useDebounce } from '@/hooks/useDebounce';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { BackendStudent, BackendFeeStructure } from '@/lib/types';
+
+interface ChildData {
+  id: string;
+  name?: string;
+  first_name?: string;
+  last_name?: string;
+  student_id?: string;
+  class?: string;
+  section?: string;
+  roll_number?: string;
+}
+
+interface FeeAssignment {
+  id: string;
+  status: 'assigned' | 'paid' | 'overdue';
+  assigned_date?: string;
+  feeStructure?: BackendFeeStructure;
+}
 
 export default function ChildFeesPage() {
   const router = useRouter();
   const params = useParams();
   const childId = params?.childId as string;
   
-  const [child, setChild] = useState<any>(null);
-  const [fees, setFees] = useState<any[]>([]);
-  const [filteredFees, setFilteredFees] = useState<any[]>([]);
+  const [child, setChild] = useState<ChildData | null>(null);
+  const [fees, setFees] = useState<FeeAssignment[]>([]);
+  const [filteredFees, setFilteredFees] = useState<FeeAssignment[]>([]);
   const [localSearch, setLocalSearch] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -50,13 +69,27 @@ export default function ChildFeesPage() {
   const debouncedSearch = useDebounce(search, 500);
 
   // Fetch child profile
-  const { loading: childLoading, execute: fetchChild } = useApi(
+  type ChildProfileResponse = {
+    data: {
+      child: ChildData;
+    };
+  } | {
+    data: ChildData;
+  } | {
+    child: ChildData;
+  } | ChildData;
+
+  const { loading: childLoading, execute: fetchChild } = useApi<ChildProfileResponse>(
     () => parentPortalApi.getChildProfile(childId),
     {
-      onSuccess: (response: any) => {
-        const data = response?.data || response;
-        if (data) {
-          setChild(data.child || data);
+      onSuccess: (response) => {
+        const data = response && typeof response === 'object' && 'data' in response ? response.data : response;
+        if (data && typeof data === 'object') {
+          if ('child' in data && data.child) {
+            setChild(data.child as ChildData);
+          } else {
+            setChild(data as ChildData);
+          }
         }
       },
       onError: (error) => {
@@ -66,15 +99,31 @@ export default function ChildFeesPage() {
   );
 
   // Fetch fees
-  const { loading: feesLoading, execute: fetchFees } = useApi(
-    (params?: any) => parentPortalApi.getChildFees(childId, params),
+  type ChildFeesResponse = {
+    data: {
+      fees: FeeAssignment[];
+      child?: ChildData;
+    };
+  } | {
+    data: FeeAssignment[];
+  } | {
+    fees: FeeAssignment[];
+    child?: ChildData;
+  } | FeeAssignment[];
+
+  const { loading: feesLoading, execute: fetchFees } = useApi<ChildFeesResponse>(
+    (params?: { academic_year?: string; status?: string }) => parentPortalApi.getChildFees(childId, params),
     {
-      onSuccess: (response: any) => {
-        const data = response?.data || response;
-        if (data) {
-          setFees(data.fees || []);
-          if (data.child && !child) {
-            setChild(data.child);
+      onSuccess: (response) => {
+        const data = response && typeof response === 'object' && 'data' in response ? response.data : response;
+        if (data && typeof data === 'object') {
+          if (Array.isArray(data)) {
+            setFees(data);
+          } else if ('fees' in data && Array.isArray(data.fees)) {
+            setFees(data.fees);
+            if (data.child && !child) {
+              setChild(data.child as ChildData);
+            }
           }
         }
       },
@@ -95,7 +144,10 @@ export default function ChildFeesPage() {
 
   useEffect(() => {
     if (childId) {
-      const params: any = {};
+      const params: {
+        academic_year?: string;
+        status?: string;
+      } = {};
       if (academicYearFilter !== 'all') {
         params.academic_year = academicYearFilter;
       }
@@ -114,7 +166,7 @@ export default function ChildFeesPage() {
     // Search filter
     if (debouncedSearch) {
       const searchLower = debouncedSearch.toLowerCase();
-      filtered = filtered.filter((fee: any) => {
+      filtered = filtered.filter((fee) => {
         const feeType = (fee.feeStructure?.fee_type || '').toLowerCase();
         const description = (fee.feeStructure?.description || '').toLowerCase();
         return (
@@ -138,15 +190,15 @@ export default function ChildFeesPage() {
   const academicYears = Array.from(
     new Set(
       fees
-        .map((fee: any) => fee.feeStructure?.academic_year)
-        .filter((year: any) => year)
+        .map((fee) => fee.feeStructure?.academic_year)
+        .filter((year): year is string => Boolean(year))
     )
   ).sort();
 
   // Calculate summary statistics
   const summary = fees.reduce(
-    (acc: any, fee: any) => {
-      const amount = parseFloat(fee.feeStructure?.amount || 0);
+    (acc, fee) => {
+      const amount = parseFloat(fee.feeStructure?.amount || '0');
       acc.totalAmount += amount;
       if (fee.status === 'paid') {
         acc.paidAmount += amount;
@@ -272,7 +324,7 @@ export default function ChildFeesPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Years</SelectItem>
-                  {academicYears.map((year: any) => (
+                  {academicYears.map((year: string) => (
                     <SelectItem key={year} value={year}>
                       {year}
                     </SelectItem>
@@ -380,8 +432,8 @@ export default function ChildFeesPage() {
             />
           ) : (
             <div className="space-y-4">
-              {filteredFees.map((fee: any) => {
-                const feeStructure = fee.feeStructure || {};
+              {filteredFees.map((fee) => {
+                const feeStructure = fee.feeStructure || ({} as BackendFeeStructure);
                 const dueDate = feeStructure.due_date 
                   ? new Date(feeStructure.due_date) 
                   : null;
