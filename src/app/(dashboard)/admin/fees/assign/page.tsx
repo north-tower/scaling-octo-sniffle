@@ -5,7 +5,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/tables/DataTable';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -14,10 +14,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Eye, Edit, Trash2, Plus, BookOpen, Loader2, Search, ArrowLeft, Shield } from 'lucide-react';
+import { MoreHorizontal, Plus, BookOpen, Loader2, Search, ArrowLeft, Shield } from 'lucide-react';
 import { feeStructuresApi } from '@/lib/api';
 import { useApi } from '@/hooks/useApi';
 import { useDebounce } from '@/hooks/useDebounce';
+import { BackendFeeStructure, ApiError } from '@/lib/types';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { useRouter } from 'next/navigation';
@@ -61,10 +62,15 @@ interface FeeAssignment {
 export default function FeeAssignmentsPage() {
   const router = useRouter();
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
+  const [limit] = useState(10);
   const [search, setSearch] = useState('');
   const [assignments, setAssignments] = useState<FeeAssignment[]>([]);
-  const [pagination, setPagination] = useState<any>(null);
+  const [pagination, setPagination] = useState<{
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  } | null>(null);
   const [localSearch, setLocalSearch] = useState('');
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
   const [isWaiveDialogOpen, setIsWaiveDialogOpen] = useState(false);
@@ -97,22 +103,26 @@ export default function FeeAssignmentsPage() {
   const debouncedSearch = useDebounce(search, 500);
 
   // Fetch fee structures for assignment dropdown
-  const { loading: feeStructuresLoading, execute: fetchFeeStructures } = useApi(
+  const { loading: feeStructuresLoading, execute: fetchFeeStructures } = useApi<{ feeStructures: BackendFeeStructure[] } | { data: { feeStructures: BackendFeeStructure[] } } | { data: BackendFeeStructure[] } | BackendFeeStructure[]>(
     () => feeStructuresApi.getAll({ limit: 100 }),
     {
-      onSuccess: (response: any) => {
-        let feeStructuresData = [];
-        if (response?.feeStructures) {
+      onSuccess: (response) => {
+        let feeStructuresData: BackendFeeStructure[] = [];
+        if (response && typeof response === 'object' && 'feeStructures' in response && Array.isArray(response.feeStructures)) {
           feeStructuresData = response.feeStructures;
-        } else if (response?.data?.feeStructures) {
-          feeStructuresData = response.data.feeStructures;
-        } else if (response?.data && Array.isArray(response.data)) {
-          feeStructuresData = response.data;
+        } else if (response && typeof response === 'object' && 'data' in response) {
+          if (Array.isArray(response.data)) {
+            feeStructuresData = response.data;
+          } else if (response.data && typeof response.data === 'object' && 'feeStructures' in response.data && Array.isArray(response.data.feeStructures)) {
+            feeStructuresData = response.data.feeStructures;
+          }
+        } else if (Array.isArray(response)) {
+          feeStructuresData = response;
         }
 
-        const formatted = feeStructuresData.map((fs: any) => ({
+        const formatted = feeStructuresData.map((fs: BackendFeeStructure) => ({
           id: fs.id?.toString() || '',
-          name: `${fs.fee_type || 'Fee'} - Class ${fs.class || ''} - KES ${parseFloat(fs.amount || 0).toLocaleString()}`,
+          name: `${fs.fee_type || 'Fee'} - Class ${fs.class || ''} - KES ${parseFloat(fs.amount || '0').toLocaleString()}`,
         }));
         setFeeStructures(formatted);
       },
@@ -120,22 +130,44 @@ export default function FeeAssignmentsPage() {
   );
 
   // Fetch assignments
-  const { loading, execute: fetchAssignments } = useApi(
-    (params: any) => feeStructuresApi.getAssignments(params),
-    {
-      onSuccess: (response: any) => {
-        let assignmentsData = [];
-        let paginationData = null;
+  type AssignmentsResponse = {
+    assignments: FeeAssignment[];
+    pagination?: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
+  } | {
+    data: {
+      assignments: FeeAssignment[];
+      pagination?: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+      };
+    };
+  } | {
+    data: FeeAssignment[];
+  } | FeeAssignment[];
 
-        if (response?.assignments) {
+  const { loading, execute: fetchAssignments } = useApi<AssignmentsResponse>(
+    (params: { page?: number; limit?: number; search?: string }) => feeStructuresApi.getAssignments(params),
+    {
+      onSuccess: (response) => {
+        let assignmentsData: FeeAssignment[] = [];
+        let paginationData: { page: number; limit: number; total: number; totalPages: number } | null = null;
+
+        if (response && typeof response === 'object' && 'assignments' in response && Array.isArray(response.assignments)) {
           assignmentsData = response.assignments;
-          paginationData = response.pagination;
-        } else if (response?.data) {
-          if (response.data.assignments) {
-            assignmentsData = response.data.assignments;
-            paginationData = response.data.pagination;
-          } else if (Array.isArray(response.data)) {
+          paginationData = response.pagination || null;
+        } else if (response && typeof response === 'object' && 'data' in response) {
+          if (Array.isArray(response.data)) {
             assignmentsData = response.data;
+          } else if (response.data && typeof response.data === 'object' && 'assignments' in response.data && Array.isArray(response.data.assignments)) {
+            assignmentsData = response.data.assignments;
+            paginationData = response.data.pagination || null;
           }
         } else if (Array.isArray(response)) {
           assignmentsData = response;
@@ -185,7 +217,7 @@ export default function FeeAssignmentsPage() {
     setAssigning(true);
 
     try {
-      const assignData: any = {};
+      const assignData: { class?: string; student_ids?: string[] } = {};
       
       if (assignClass) {
         assignData.class = assignClass;
@@ -207,9 +239,10 @@ export default function FeeAssignmentsPage() {
         setSelectedFeeStructureId('');
         fetchAssignments({ page, limit, search: debouncedSearch });
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to assign fee structure:', error);
-      toast.error(error?.message || 'Failed to assign fee structure');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to assign fee structure';
+      toast.error(errorMessage);
     } finally {
       setAssigning(false);
     }
@@ -230,9 +263,10 @@ export default function FeeAssignmentsPage() {
         setSelectedAssignment(null);
         fetchAssignments({ page, limit, search: debouncedSearch });
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to waive assignment:', error);
-      toast.error(error?.message || 'Failed to waive assignment');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to waive assignment';
+      toast.error(errorMessage);
     } finally {
       setWaiving(false);
     }
