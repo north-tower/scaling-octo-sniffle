@@ -5,7 +5,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/tables/DataTable';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -14,11 +14,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Eye, Edit, Trash2, Plus, Receipt, Download, Loader2, Search, X, Calendar } from 'lucide-react';
+import { MoreHorizontal, Eye, Edit, Plus, Receipt, Download, Loader2, Search, X, Calendar } from 'lucide-react';
 import { paymentsApi, studentsApi, feeStructuresApi } from '@/lib/api';
 import { useApi } from '@/hooks/useApi';
 import { useDebounce } from '@/hooks/useDebounce';
 import { toast } from 'sonner';
+import { BackendStudent, BackendFeeStructure } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { useRouter } from 'next/navigation';
 import {
@@ -80,10 +81,15 @@ interface Payment {
 export default function PaymentsPage() {
   const router = useRouter();
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
+  const [limit] = useState(10);
   const [search, setSearch] = useState('');
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [pagination, setPagination] = useState<any>(null);
+  const [pagination, setPagination] = useState<{
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  } | null>(null);
   const [localSearch, setLocalSearch] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -115,20 +121,34 @@ export default function PaymentsPage() {
   const debouncedSearch = useDebounce(search, 500);
 
   // Fetch students and fee structures for dropdowns
-  const { loading: studentsLoading, execute: fetchStudents } = useApi(
+  type StudentsResponse = {
+    students: BackendStudent[];
+  } | {
+    data: {
+      students: BackendStudent[];
+    };
+  } | {
+    data: BackendStudent[];
+  } | BackendStudent[];
+
+  const { loading: studentsLoading, execute: fetchStudents } = useApi<StudentsResponse>(
     () => studentsApi.getAll({ limit: 100 }),
     {
-      onSuccess: (response: any) => {
-        let studentsData = [];
-        if (response?.students) {
+      onSuccess: (response) => {
+        let studentsData: BackendStudent[] = [];
+        if (response && typeof response === 'object' && 'students' in response && Array.isArray(response.students)) {
           studentsData = response.students;
-        } else if (response?.data?.students) {
-          studentsData = response.data.students;
-        } else if (response?.data && Array.isArray(response.data)) {
-          studentsData = response.data;
+        } else if (response && typeof response === 'object' && 'data' in response) {
+          if (Array.isArray(response.data)) {
+            studentsData = response.data;
+          } else if (response.data && typeof response.data === 'object' && 'students' in response.data && Array.isArray(response.data.students)) {
+            studentsData = response.data.students;
+          }
+        } else if (Array.isArray(response)) {
+          studentsData = response;
         }
 
-        const formatted = studentsData.map((s: any) => ({
+        const formatted = studentsData.map((s: BackendStudent) => ({
           id: s.id?.toString() || '',
           name: `${s.first_name || ''} ${s.last_name || ''} (${s.student_id || ''}) - Class ${s.class || ''}`,
         }));
@@ -137,22 +157,36 @@ export default function PaymentsPage() {
     }
   );
 
-  const { loading: feeStructuresLoading, execute: fetchFeeStructures } = useApi(
+  type FeeStructuresResponse = {
+    feeStructures: BackendFeeStructure[];
+  } | {
+    data: {
+      feeStructures: BackendFeeStructure[];
+    };
+  } | {
+    data: BackendFeeStructure[];
+  } | BackendFeeStructure[];
+
+  const { loading: feeStructuresLoading, execute: fetchFeeStructures } = useApi<FeeStructuresResponse>(
     () => feeStructuresApi.getAll({ limit: 100 }),
     {
-      onSuccess: (response: any) => {
-        let feeStructuresData = [];
-        if (response?.feeStructures) {
+      onSuccess: (response) => {
+        let feeStructuresData: BackendFeeStructure[] = [];
+        if (response && typeof response === 'object' && 'feeStructures' in response && Array.isArray(response.feeStructures)) {
           feeStructuresData = response.feeStructures;
-        } else if (response?.data?.feeStructures) {
-          feeStructuresData = response.data.feeStructures;
-        } else if (response?.data && Array.isArray(response.data)) {
-          feeStructuresData = response.data;
+        } else if (response && typeof response === 'object' && 'data' in response) {
+          if (Array.isArray(response.data)) {
+            feeStructuresData = response.data;
+          } else if (response.data && typeof response.data === 'object' && 'feeStructures' in response.data && Array.isArray(response.data.feeStructures)) {
+            feeStructuresData = response.data.feeStructures;
+          }
+        } else if (Array.isArray(response)) {
+          feeStructuresData = response;
         }
 
-        const formatted = feeStructuresData.map((fs: any) => ({
+        const formatted = feeStructuresData.map((fs: BackendFeeStructure) => ({
           id: fs.id?.toString() || '',
-          name: `${fs.fee_type || 'Fee'} - Class ${fs.class || ''} - KES ${parseFloat(fs.amount || 0).toLocaleString()}`,
+          name: `${fs.fee_type || 'Fee'} - Class ${fs.class || ''} - KES ${parseFloat(fs.amount || '0').toLocaleString()}`,
         }));
         setFeeStructures(formatted);
       },
@@ -160,22 +194,44 @@ export default function PaymentsPage() {
   );
 
   // Fetch payments
-  const { loading, execute: fetchPayments } = useApi(
-    (params: any) => paymentsApi.getAll(params),
-    {
-      onSuccess: (response: any) => {
-        let paymentsData = [];
-        let paginationData = null;
+  type PaymentsResponse = {
+    payments: Payment[];
+    pagination?: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
+  } | {
+    data: {
+      payments: Payment[];
+      pagination?: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+      };
+    };
+  } | {
+    data: Payment[];
+  } | Payment[];
 
-        if (response?.payments) {
+  const { loading, execute: fetchPayments } = useApi<PaymentsResponse>(
+    (params: { page?: number; limit?: number; search?: string }) => paymentsApi.getAll(params),
+    {
+      onSuccess: (response) => {
+        let paymentsData: Payment[] = [];
+        let paginationData: { page: number; limit: number; total: number; totalPages: number } | null = null;
+
+        if (response && typeof response === 'object' && 'payments' in response && Array.isArray(response.payments)) {
           paymentsData = response.payments;
-          paginationData = response.pagination;
-        } else if (response?.data) {
-          if (response.data.payments) {
-            paymentsData = response.data.payments;
-            paginationData = response.data.pagination;
-          } else if (Array.isArray(response.data)) {
+          paginationData = response.pagination || null;
+        } else if (response && typeof response === 'object' && 'data' in response) {
+          if (Array.isArray(response.data)) {
             paymentsData = response.data;
+          } else if (response.data && typeof response.data === 'object' && 'payments' in response.data && Array.isArray(response.data.payments)) {
+            paymentsData = response.data.payments;
+            paginationData = response.data.pagination || null;
           }
         } else if (Array.isArray(response)) {
           paymentsData = response;
@@ -212,7 +268,7 @@ export default function PaymentsPage() {
     setPage(1);
   };
 
-  const handleFieldChange = (field: string, value: any) => {
+  const handleFieldChange = (field: string, value: string | number | boolean | Date | undefined) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (formErrors[field]) {
       setFormErrors((prev) => {
@@ -240,7 +296,19 @@ export default function PaymentsPage() {
 
     try {
       // Transform to backend format
-      const backendData: any = {
+      const backendData: {
+        student_id: number;
+        fee_structure_id: number;
+        amount_paid: number;
+        payment_method: string;
+        payment_date: string;
+        transaction_id?: string;
+        notes?: string;
+        bank_reference?: string;
+        cheque_number?: string;
+        cheque_date?: string;
+        bank_name?: string;
+      } = {
         student_id: parseInt(formData.student_id),
         fee_structure_id: parseInt(formData.fee_structure_id),
         amount_paid: parseFloat(formData.amount_paid),
@@ -263,9 +331,10 @@ export default function PaymentsPage() {
         resetForm();
         fetchPayments({ page, limit, search: debouncedSearch });
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to create payment:', error);
-      toast.error(error?.message || 'Failed to record payment');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to record payment';
+      toast.error(errorMessage);
     }
   };
 
@@ -273,7 +342,13 @@ export default function PaymentsPage() {
     if (!selectedPayment) return;
 
     try {
-      const updateData: any = {};
+      const updateData: {
+        notes?: string;
+        bank_reference?: string;
+        cheque_number?: string;
+        cheque_date?: string;
+        bank_name?: string;
+      } = {};
       if (formData.notes !== undefined) updateData.notes = formData.notes;
       if (formData.bank_reference !== undefined) updateData.bank_reference = formData.bank_reference;
       if (formData.cheque_number !== undefined) updateData.cheque_number = formData.cheque_number;
@@ -289,9 +364,10 @@ export default function PaymentsPage() {
         resetForm();
         fetchPayments({ page, limit, search: debouncedSearch });
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to update payment:', error);
-      toast.error(error?.message || 'Failed to update payment');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update payment';
+      toast.error(errorMessage);
     }
   };
 
@@ -308,9 +384,10 @@ export default function PaymentsPage() {
         setSelectedPayment(null);
         fetchPayments({ page, limit, search: debouncedSearch });
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to void payment:', error);
-      toast.error(error?.message || 'Failed to void payment');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to void payment';
+      toast.error(errorMessage);
     }
   };
 
@@ -318,9 +395,10 @@ export default function PaymentsPage() {
     try {
       await paymentsApi.getReceipt(paymentId);
       toast.success('Receipt downloaded');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to download receipt:', error);
-      toast.error(error?.message || 'Failed to download receipt');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to download receipt';
+      toast.error(errorMessage);
     }
   };
 
@@ -339,11 +417,6 @@ export default function PaymentsPage() {
       bank_name: '',
     });
     setFormErrors({});
-  };
-
-  const handleOpenAddDialog = () => {
-    resetForm();
-    setIsAddDialogOpen(true);
   };
 
   const handleOpenEditDialog = (payment: Payment) => {
@@ -1067,7 +1140,7 @@ export default function PaymentsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Void Payment</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to void this payment? This action cannot be undone and will update the student's fee balance.
+              Are you sure you want to void this payment? This action cannot be undone and will update the student&apos;s fee balance.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-4 py-4">
