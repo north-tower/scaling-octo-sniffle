@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/tables/DataTable';
 import { Button } from '@/components/ui/button';
@@ -14,12 +14,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Eye, Edit, Trash2, User, Plus, Loader2, Search, Upload } from 'lucide-react';
-import { Student, CreateStudentForm } from '@/lib/types';
+import { MoreHorizontal, Eye, Edit, Trash2, Plus, Loader2, Search, Upload } from 'lucide-react';
+import { Student, CreateStudentForm, BackendStudent } from '@/lib/types';
 import { studentsApi } from '@/lib/api';
 import { useApi } from '@/hooks/useApi';
 import { useRouter } from 'next/navigation';
-import { format } from 'date-fns';
 import { useDebounce } from '@/hooks/useDebounce';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
@@ -32,11 +31,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { FormField } from '@/components/forms/FormField';
-import { Label } from '@/components/ui/label';
 import { createStudentSchema } from '@/lib/validations';
 
 // Transform backend student data to frontend format
-const transformStudent = (backendStudent: any): Student => {
+const transformStudent = (backendStudent: BackendStudent | Record<string, unknown>): Student => {
   return {
     id: backendStudent.id?.toString() || '',
     studentId: backendStudent.student_id || backendStudent.studentId || '',
@@ -70,10 +68,15 @@ const transformStudent = (backendStudent: any): Student => {
 export default function StudentsPage() {
   const router = useRouter();
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
+  const [limit] = useState(10);
   const [search, setSearch] = useState('');
   const [students, setStudents] = useState<Student[]>([]);
-  const [pagination, setPagination] = useState<any>(null);
+  const [pagination, setPagination] = useState<{
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  } | null>(null);
   const [studentBalances, setStudentBalances] = useState<Record<string, number>>({});
   const [localSearch, setLocalSearch] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -115,26 +118,58 @@ export default function StudentsPage() {
   const debouncedSearch = useDebounce(search, 500);
 
   // Fetch students
-  const { loading, execute: fetchStudents } = useApi(
-    (params: any) => studentsApi.getAll(params),
-    {
-      onSuccess: (response: any) => {
-        // Handle different response structures
-        let studentsData = [];
-        let paginationData = null;
+  type StudentsResponse = {
+    students: BackendStudent[];
+    pagination?: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
+  } | {
+    data: {
+      students: BackendStudent[];
+      pagination?: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+      };
+    };
+  } | {
+    data: BackendStudent[];
+  } | {
+    data: {
+      data: BackendStudent[];
+      pagination?: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+      };
+    };
+  } | BackendStudent[];
 
-        if (response?.students) {
+  const { loading, execute: fetchStudents } = useApi<StudentsResponse>(
+    (params: { page?: number; limit?: number; search?: string }) => studentsApi.getAll(params),
+    {
+      onSuccess: (response) => {
+        // Handle different response structures
+        let studentsData: BackendStudent[] = [];
+        let paginationData: { page: number; limit: number; total: number; totalPages: number } | null = null;
+
+        if (response && typeof response === 'object' && 'students' in response && Array.isArray(response.students)) {
           studentsData = response.students;
-          paginationData = response.pagination;
-        } else if (response?.data) {
+          paginationData = response.pagination || null;
+        } else if (response && typeof response === 'object' && 'data' in response) {
           if (Array.isArray(response.data)) {
             studentsData = response.data;
-          } else if (response.data.students) {
+          } else if (response.data && typeof response.data === 'object' && 'students' in response.data && Array.isArray(response.data.students)) {
             studentsData = response.data.students;
-            paginationData = response.data.pagination;
-          } else if (response.data.data) {
+            paginationData = response.data.pagination || null;
+          } else if (response.data && typeof response.data === 'object' && 'data' in response.data && Array.isArray(response.data.data)) {
             studentsData = response.data.data;
-            paginationData = response.data.pagination;
+            paginationData = response.data.pagination || null;
           }
         } else if (Array.isArray(response)) {
           studentsData = response;
@@ -149,16 +184,16 @@ export default function StudentsPage() {
           
           // Try to extract balances from student data if available
           const balances: Record<string, number> = {};
-          studentsData.forEach((student: any) => {
-            if (student.id) {
+          studentsData.forEach((student) => {
+            if (student && typeof student === 'object' && 'id' in student) {
               // Check for balance in various possible fields
-              const balance = student.balance || 
-                             student.outstanding_balance || 
-                             student.outstandingBalance || 
-                             student.total_balance ||
-                             student.totalBalance ||
+              const balance = ('balance' in student && typeof student.balance === 'number' ? student.balance : 0) ||
+                             ('outstanding_balance' in student && typeof student.outstanding_balance === 'number' ? student.outstanding_balance : 0) ||
+                             ('outstandingBalance' in student && typeof student.outstandingBalance === 'number' ? student.outstandingBalance : 0) ||
+                             ('total_balance' in student && typeof student.total_balance === 'number' ? student.total_balance : 0) ||
+                             ('totalBalance' in student && typeof student.totalBalance === 'number' ? student.totalBalance : 0) ||
                              0;
-              balances[student.id.toString()] = balance;
+              balances[String(student.id)] = balance;
             }
           });
           if (Object.keys(balances).length > 0) {
@@ -187,22 +222,23 @@ export default function StudentsPage() {
     setPage(1); // Reset to first page on new search
   };
 
-  const handleDelete = async (studentId: string) => {
+  const handleDelete = useCallback(async (studentId: string) => {
     if (confirm('Are you sure you want to delete this student?')) {
       try {
         await studentsApi.delete(studentId);
         toast.success('Student deleted successfully');
         // Refresh the list
         fetchStudents({ page, limit, search: debouncedSearch });
-      } catch (error: any) {
+      } catch (error) {
         console.error('Failed to delete student:', error);
-        toast.error(error?.message || 'Failed to delete student');
+        const errorMessage = error instanceof Error ? error.message : 'Failed to delete student';
+        toast.error(errorMessage);
       }
     }
-  };
+  }, [page, limit, debouncedSearch, fetchStudents]);
 
   // Handle form field changes
-  const handleFieldChange = (field: keyof CreateStudentForm | 'section' | 'rollNumber', value: any) => {
+  const handleFieldChange = (field: keyof CreateStudentForm | 'section' | 'rollNumber', value: string | number | boolean | Date | undefined) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     // Clear error for this field when user starts typing
     if (formErrors[field]) {
@@ -219,10 +255,11 @@ export default function StudentsPage() {
 
   const handleAddStudent = async () => {
     // Validate form - check required fields manually since we have extra fields
-    if (!(formData as any).section || !(formData as any).rollNumber) {
+    const formDataWithExtras = formData as Partial<CreateStudentForm> & { section?: string; rollNumber?: string };
+    if (!formDataWithExtras.section || !formDataWithExtras.rollNumber) {
       const errors: Record<string, string> = {};
-      if (!(formData as any).section) errors.section = 'Section is required';
-      if (!(formData as any).rollNumber) errors.rollNumber = 'Roll number is required';
+      if (!formDataWithExtras.section) errors.section = 'Section is required';
+      if (!formDataWithExtras.rollNumber) errors.rollNumber = 'Roll number is required';
       setFormErrors(errors);
       toast.error('Please fill in all required fields');
       return;
@@ -252,7 +289,24 @@ export default function StudentsPage() {
         return;
       }
       
-      const backendData: any = {
+      const backendData: {
+        student_id: string;
+        first_name: string;
+        last_name: string;
+        date_of_birth: string | Date | undefined;
+        gender: string;
+        blood_group: string | null;
+        address: string;
+        phone: string;
+        email: string | null;
+        emergency_contact: string;
+        emergency_phone: string;
+        class: string;
+        section: string;
+        roll_number: string;
+        admission_date: string | Date | undefined;
+        parent_id?: number;
+      } = {
         student_id: validatedData.studentId,
         first_name: validatedData.firstName,
         last_name: validatedData.lastName,
@@ -265,8 +319,8 @@ export default function StudentsPage() {
         emergency_contact: validatedData.emergencyContact,
         emergency_phone: cleanEmergencyPhone,
         class: validatedData.classId, // Backend expects 'class' not 'class_id'
-        section: (formData as any).section || 'A', // Default to 'A' if not provided
-        roll_number: (formData as any).rollNumber || '',
+        section: formDataWithExtras.section || 'A', // Default to 'A' if not provided
+        roll_number: formDataWithExtras.rollNumber || '',
         admission_date: validatedData.admissionDate?.toISOString().split('T')[0] || validatedData.admissionDate,
       };
       
@@ -305,21 +359,26 @@ export default function StudentsPage() {
         // Refresh the list
         fetchStudents({ page, limit, search: debouncedSearch });
       }
-    } catch (error: any) {
-      if (error.errors) {
+    } catch (error) {
+      if (error && typeof error === 'object' && 'errors' in error && Array.isArray(error.errors)) {
         // Zod validation errors
         const errors: Record<string, string> = {};
-        error.errors.forEach((err: any) => {
-          errors[err.path[0]] = err.message;
+        (error.errors as Array<{ path: (string | number)[]; message: string }>).forEach((err) => {
+          if (err.path && err.path[0] !== undefined) {
+            errors[String(err.path[0])] = err.message;
+          }
         });
         setFormErrors(errors);
         toast.error('Please fix the form errors');
-      } else if (error.details) {
+      } else if (error && typeof error === 'object' && 'details' in error) {
         // API validation errors
-        setFormErrors(error.details);
-        toast.error(error.message || 'Failed to create student');
+        const details = error.details as Record<string, string>;
+        setFormErrors(details);
+        const errorMessage = 'message' in error && typeof error.message === 'string' ? error.message : 'Failed to create student';
+        toast.error(errorMessage);
       } else {
-        toast.error(error.message || 'Failed to create student');
+        const errorMessage = error instanceof Error ? error.message : 'Failed to create student';
+        toast.error(errorMessage);
       }
     } finally {
       setSubmitting(false);
@@ -475,7 +534,7 @@ export default function StudentsPage() {
         );
       },
     },
-  ], [studentBalances]);
+  ], [studentBalances, handleDelete]);
 
   return (
     <div className="space-y-6">
@@ -531,10 +590,10 @@ export default function StudentsPage() {
         showPagination={false}
         showExport={true}
         loading={loading}
-        onRowClick={(student) => {
+        onRowClick={(student: Student) => {
           console.log('Row clicked:', student);
         }}
-        onSelectionChange={(selectedStudents) => {
+        onSelectionChange={(selectedStudents: Student[]) => {
           console.log('Selected students:', selectedStudents);
         }}
       />
@@ -624,7 +683,7 @@ export default function StudentsPage() {
                 type="select"
                 placeholder="Select section"
                 required
-                value={(formData as any).section}
+                value={formData.section}
                 onChange={(value) => handleFieldChange('section', value)}
                 options={[
                   { label: 'A', value: 'A' },
@@ -644,7 +703,7 @@ export default function StudentsPage() {
                 type="text"
                 placeholder="Enter roll number"
                 required
-                value={(formData as any).rollNumber}
+                value={formData.rollNumber}
                 onChange={(value) => handleFieldChange('rollNumber', value)}
                 error={formErrors.rollNumber}
               />
