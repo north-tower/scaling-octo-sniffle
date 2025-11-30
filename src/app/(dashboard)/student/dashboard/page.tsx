@@ -42,7 +42,7 @@ export default function StudentDashboard() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">My Dashboard</h1>
           <p className="text-muted-foreground">
-            Welcome back! Here's your fee summary and recent activities.
+            Welcome back! Here&apos;s your fee summary and recent activities.
           </p>
         </div>
         <Button>

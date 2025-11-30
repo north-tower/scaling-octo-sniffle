@@ -80,24 +80,6 @@ interface PaymentSummary {
   byMethod: Record<string, { count: number; amount: number }>;
 }
 
-type SummaryResponse = {
-  data: {
-    children: ChildWithBalance[];
-  };
-} | {
-  children: ChildWithBalance[];
-} | ChildWithBalance[];
-
-type PaymentsResponse = {
-  data: {
-    payments: PaymentWithChild[];
-    pagination?: PaginationData;
-  };
-} | {
-  payments: PaymentWithChild[];
-  pagination?: PaginationData;
-} | PaymentWithChild[];
-
 export default function ParentPaymentsPage() {
   const router = useRouter();
   const [children, setChildren] = useState<ChildWithBalance[]>([]);

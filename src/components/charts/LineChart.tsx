@@ -44,7 +44,7 @@ export function LineChartComponent({
     const sortedXValues = Array.from(allXValues).sort();
     
     return sortedXValues.map(x => {
-      const point: any = { x };
+      const point: Record<string, string | number> = { x };
       data.forEach((series, index) => {
         const pointData = series.data.find(p => p.x === x);
         point[`series${index}`] = pointData?.y || 0;

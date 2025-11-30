@@ -50,10 +50,11 @@ export default function TestConnectionPage() {
       } else {
         throw new Error('Backend not reachable');
       }
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Connection failed';
       updateResult(0, {
         status: 'error',
-        message: error.message || 'Connection failed',
+        message: errorMessage,
       });
       setTesting(false);
       return;
@@ -74,10 +75,11 @@ export default function TestConnectionPage() {
       } else {
         throw new Error('Login failed');
       }
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Login failed';
       updateResult(1, {
         status: 'error',
-        message: error.message || 'Login failed',
+        message: errorMessage,
       });
     }
 
@@ -96,10 +98,11 @@ export default function TestConnectionPage() {
       } else {
         throw new Error('Failed to get stats');
       }
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to get stats';
       updateResult(2, {
         status: 'error',
-        message: error.message || 'Failed to get stats',
+        message: errorMessage,
       });
     }
 
@@ -118,10 +121,11 @@ export default function TestConnectionPage() {
       } else {
         throw new Error('Failed to get students');
       }
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to get students';
       updateResult(3, {
         status: 'error',
-        message: error.message || 'Failed to get students',
+        message: errorMessage,
       });
     }
 

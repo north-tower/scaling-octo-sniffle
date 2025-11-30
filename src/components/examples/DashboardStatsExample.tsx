@@ -6,12 +6,19 @@ import { useApi } from '@/hooks/useApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Users, DollarSign, AlertCircle, TrendingUp } from 'lucide-react';
 
+interface DashboardStats {
+  totalStudents?: number;
+  totalCollection?: number;
+  totalFees?: number;
+  pendingDues?: number;
+}
+
 /**
  * Example component showing how to fetch and display dashboard statistics
  * This demonstrates real-time data fetching from the backend
  */
 export function DashboardStatsExample() {
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
 
   const { loading, execute } = useApi(dashboardApi.getStats, {
     immediate: true, // Fetch immediately on mount
