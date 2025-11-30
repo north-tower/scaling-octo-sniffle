@@ -57,7 +57,7 @@ const adminNavItems: NavItem[] = [
     icon: Users,
     children: [
       { title: 'All Students', href: '/admin/students', icon: Users },
-      { title: 'Add Student', href: '/admin/students/add', icon: User },
+      // { title: 'Add Student', href: '/admin/students/add', icon: User },
       { title: 'Import Students', href: '/admin/students/import', icon: ClipboardList },
     ],
   },
@@ -66,7 +66,7 @@ const adminNavItems: NavItem[] = [
     href: '/admin/fees',
     icon: CreditCard,
     children: [
-      { title: 'Fee Structures', href: '/admin/fees/structures', icon: BookOpen },
+      { title: 'Fee Structures', href: '/admin/fees', icon: BookOpen },
       { title: 'Assign Fees', href: '/admin/fees/assign', icon: ClipboardList },
       { title: 'Outstanding Fees', href: '/admin/fees/outstanding', icon: Calendar },
     ],
