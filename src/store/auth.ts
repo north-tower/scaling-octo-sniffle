@@ -60,8 +60,8 @@ export const useAuthStore = create<AuthStore>()(
           } else {
             throw new Error(response.message || 'Login failed');
           }
-        } catch (error: any) {
-          const errorMessage = error.message || 'Login failed';
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Login failed';
           set({
             user: null,
             isAuthenticated: false,
@@ -133,7 +133,7 @@ export const useAuthStore = create<AuthStore>()(
           } else {
             throw new Error('Token refresh failed');
           }
-        } catch (error) {
+        } catch {
           // Refresh failed, logout user
           localStorage.removeItem('authToken');
           localStorage.removeItem('refreshToken');
@@ -168,8 +168,8 @@ export const useAuthStore = create<AuthStore>()(
           } else {
             throw new Error(response.message || 'Profile update failed');
           }
-        } catch (error: any) {
-          const errorMessage = error.message || 'Profile update failed';
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Profile update failed';
           set({
             isLoading: false,
             error: errorMessage,
@@ -206,7 +206,7 @@ export const useAuthStore = create<AuthStore>()(
           } else {
             throw new Error('Authentication check failed');
           }
-        } catch (error) {
+        } catch {
           // Auth check failed, try to refresh token
           await get().refreshToken();
         }

@@ -462,7 +462,7 @@ export type TableColumn<T> = {
   title: string;
   sortable?: boolean;
   filterable?: boolean;
-  render?: (value: any, row: T) => React.ReactNode;
+  render?: (value: unknown, row: T) => React.ReactNode;
 };
 
 export type TableAction<T> = {
@@ -497,7 +497,7 @@ export type ExportOptions = {
     start: Date;
     end: Date;
   };
-  filters?: Record<string, any>;
+  filters?: Record<string, unknown>;
 };
 
 // Settings Types
@@ -533,7 +533,7 @@ export type UserSettings = {
 export type ApiError = {
   message: string;
   code?: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   statusCode: number;
 };
 

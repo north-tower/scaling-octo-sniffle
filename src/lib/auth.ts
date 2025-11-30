@@ -19,8 +19,10 @@ export const canAccessRoute = (user: AuthUser | null, allowedRoles: UserRole[]):
 };
 
 // Route protection middleware
-export const withAuth = (handler: Function, allowedRoles?: UserRole[]) => {
-  return async (req: NextRequest, ...args: any[]) => {
+type RouteHandler = (req: NextRequest, ...args: unknown[]) => Promise<NextResponse>;
+
+export const withAuth = (handler: RouteHandler) => {
+  return async (req: NextRequest, ...args: unknown[]): Promise<NextResponse> => {
     // This would be implemented with actual auth checking
     // For now, we'll return the handler
     return handler(req, ...args);
@@ -29,8 +31,8 @@ export const withAuth = (handler: Function, allowedRoles?: UserRole[]) => {
 
 // Role-based route protection
 export const withRole = (roles: UserRole[]) => {
-  return (handler: Function) => {
-    return async (req: NextRequest, ...args: any[]) => {
+  return (handler: RouteHandler): RouteHandler => {
+    return async (req: NextRequest, ...args: unknown[]): Promise<NextResponse> => {
       // This would check user roles and protect routes
       // For now, we'll return the handler
       return handler(req, ...args);
@@ -39,32 +41,32 @@ export const withRole = (roles: UserRole[]) => {
 };
 
 // Admin route protection
-export const withAdmin = (handler: Function) => {
+export const withAdmin = (handler: RouteHandler): RouteHandler => {
   return withRole(['admin'])(handler);
 };
 
 // Student route protection
-export const withStudent = (handler: Function) => {
+export const withStudent = (handler: RouteHandler): RouteHandler => {
   return withRole(['student'])(handler);
 };
 
 // Parent route protection
-export const withParent = (handler: Function) => {
+export const withParent = (handler: RouteHandler): RouteHandler => {
   return withRole(['parent'])(handler);
 };
 
 // Accountant route protection
-export const withAccountant = (handler: Function) => {
+export const withAccountant = (handler: RouteHandler): RouteHandler => {
   return withRole(['accountant'])(handler);
 };
 
 // Admin or Accountant route protection
-export const withAdminOrAccountant = (handler: Function) => {
+export const withAdminOrAccountant = (handler: RouteHandler): RouteHandler => {
   return withRole(['admin', 'accountant'])(handler);
 };
 
 // Student or Parent route protection
-export const withStudentOrParent = (handler: Function) => {
+export const withStudentOrParent = (handler: RouteHandler): RouteHandler => {
   return withRole(['student', 'parent'])(handler);
 };
 
@@ -94,7 +96,13 @@ export const clearTokenFromResponse = (res: NextResponse): NextResponse => {
 };
 
 // JWT token utilities
-export const parseJWT = (token: string): any => {
+interface JWTPayload {
+  exp?: number;
+  iat?: number;
+  [key: string]: unknown;
+}
+
+export const parseJWT = (token: string): JWTPayload | null => {
   try {
     const base64Url = token.split('.')[1];
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -104,8 +112,8 @@ export const parseJWT = (token: string): any => {
         .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
         .join('')
     );
-    return JSON.parse(jsonPayload);
-  } catch (error) {
+    return JSON.parse(jsonPayload) as JWTPayload;
+  } catch {
     return null;
   }
 };
@@ -182,7 +190,7 @@ export const generateSecurePassword = (length: number = 12): string => {
 };
 
 // Session management
-export const createSession = (user: AuthUser): { token: string; refreshToken: string } => {
+export const createSession = (): { token: string; refreshToken: string } => {
   // In a real implementation, this would create JWT tokens
   // For now, we'll return mock tokens
   const token = `mock-jwt-token-${Date.now()}`;

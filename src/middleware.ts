@@ -4,14 +4,6 @@ import type { NextRequest } from 'next/server';
 // Define public routes that don't require authentication
 const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password', '/test-connection'];
 
-// Define role-based route access
-const roleRoutes = {
-  admin: ['/admin'],
-  accountant: ['/admin'],
-  student: ['/student'],
-  parent: ['/parent'],
-};
-
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
