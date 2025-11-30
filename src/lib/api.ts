@@ -31,18 +31,15 @@ const apiClient: AxiosInstance = axios.create({
 
 // Token management
 let authToken: string | null = null;
-let refreshToken: string | null = null;
 
 export const setAuthTokens = (token: string, refresh: string) => {
   authToken = token;
-  refreshToken = refresh;
   localStorage.setItem('authToken', token);
   localStorage.setItem('refreshToken', refresh);
 };
 
 export const clearAuthTokens = () => {
   authToken = null;
-  refreshToken = null;
   localStorage.removeItem('authToken');
   localStorage.removeItem('refreshToken');
 };
@@ -108,10 +105,11 @@ apiClient.interceptors.response.use(
     }
 
     // Handle other errors
+    const errorData = error.response?.data as { message?: string; code?: string; details?: Record<string, unknown> } | undefined;
     const apiError: ApiError = {
-      message: error.response?.data?.message || error.message || 'An error occurred',
-      code: error.response?.data?.code,
-      details: error.response?.data?.details,
+      message: errorData?.message || error.message || 'An error occurred',
+      code: errorData?.code,
+      details: errorData?.details,
       statusCode: error.response?.status || 500,
     };
 
@@ -133,19 +131,19 @@ export const api = {
   },
 
   // POST request
-  post: async <T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> => {
+  post: async <T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<ApiResponse<T>> => {
     const response = await apiClient.post(url, data, config);
     return response.data;
   },
 
   // PUT request
-  put: async <T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> => {
+  put: async <T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<ApiResponse<T>> => {
     const response = await apiClient.put(url, data, config);
     return response.data;
   },
 
   // PATCH request
-  patch: async <T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> => {
+  patch: async <T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<ApiResponse<T>> => {
     const response = await apiClient.patch(url, data, config);
     return response.data;
   },
@@ -197,10 +195,11 @@ export const api = {
 // Authentication API
 export const authApi = {
   login: async (email: string, password: string): Promise<ApiResponse<{ user: AuthUser; token: string; refreshToken?: string }>> => {
-    const response = await api.post('/auth/login', { email, password });
+    const response = await api.post<{ user: AuthUser; token: string; refreshToken?: string }>('/auth/login', { email, password });
     // Transform backend response to match our AuthUser type
     if (response.success && response.data) {
-      const { user, token, refreshToken } = response.data as any;
+      const responseData = response.data;
+      const { user, token, refreshToken } = responseData;
       return {
         success: true,
         data: {
@@ -214,10 +213,10 @@ export const authApi = {
         },
       };
     }
-    return response;
+    return response as ApiResponse<{ user: AuthUser; token: string; refreshToken?: string }>;
   },
 
-  register: async (userData: any): Promise<ApiResponse<{ user: AuthUser; token: string }>> => {
+  register: async (userData: unknown): Promise<ApiResponse<{ user: AuthUser; token: string }>> => {
     return api.post('/auth/register', userData);
   },
 
@@ -252,20 +251,20 @@ export const authApi = {
 
 // Students API
 export const studentsApi = {
-  getAll: async (params?: any): Promise<ApiResponse<any>> => {
-    return api.get('/students', { params });
+  getAll: async <T = unknown>(params?: Record<string, unknown>): Promise<ApiResponse<T>> => {
+    return api.get<T>('/students', { params });
   },
 
-  getById: async (id: string): Promise<ApiResponse<any>> => {
-    return api.get(`/students/${id}`);
+  getById: async <T = unknown>(id: string): Promise<ApiResponse<T>> => {
+    return api.get<T>(`/students/${id}`);
   },
 
-  create: async (data: any): Promise<ApiResponse<any>> => {
-    return api.post('/students', data);
+  create: async <T = unknown>(data: unknown): Promise<ApiResponse<T>> => {
+    return api.post<T>('/students', data);
   },
 
-  update: async (id: string, data: any): Promise<ApiResponse<any>> => {
-    return api.put(`/students/${id}`, data);
+  update: async <T = unknown>(id: string, data: unknown): Promise<ApiResponse<T>> => {
+    return api.put<T>(`/students/${id}`, data);
   },
 
   delete: async (id: string): Promise<ApiResponse<void>> => {
@@ -276,141 +275,141 @@ export const studentsApi = {
     return api.post('/students/bulk-delete', { ids });
   },
 
-  search: async (query: string): Promise<ApiResponse<any>> => {
-    return api.get('/students/search', { params: { q: query } });
+  search: async <T = unknown>(query: string): Promise<ApiResponse<T>> => {
+    return api.get<T>('/students/search', { params: { q: query } });
   },
 
-  getFees: async (id: string): Promise<ApiResponse<any>> => {
-    return api.get(`/students/${id}/fees`);
+  getFees: async <T = unknown>(id: string): Promise<ApiResponse<T>> => {
+    return api.get<T>(`/students/${id}/fees`);
   },
 
-  getPayments: async (id: string): Promise<ApiResponse<any>> => {
-    return api.get(`/students/${id}/payments`);
+  getPayments: async <T = unknown>(id: string): Promise<ApiResponse<T>> => {
+    return api.get<T>(`/students/${id}/payments`);
   },
 
-  uploadDocument: async (id: string, file: File): Promise<ApiResponse<any>> => {
-    return api.upload(`/students/${id}/documents`, file);
+  uploadDocument: async <T = unknown>(id: string, file: File): Promise<ApiResponse<T>> => {
+    return api.upload<T>(`/students/${id}/documents`, file);
   },
 
-  getDocuments: async (id: string): Promise<ApiResponse<any>> => {
-    return api.get(`/students/${id}/documents`);
+  getDocuments: async <T = unknown>(id: string): Promise<ApiResponse<T>> => {
+    return api.get<T>(`/students/${id}/documents`);
   },
 };
 
 // Parents API
 export const parentsApi = {
-  getAll: async (params?: any): Promise<ApiResponse<any>> => {
-    return api.get('/parents', { params });
+  getAll: async <T = unknown>(params?: Record<string, unknown>): Promise<ApiResponse<T>> => {
+    return api.get<T>('/parents', { params });
   },
 
-  getById: async (id: string): Promise<ApiResponse<any>> => {
-    return api.get(`/parents/${id}`);
+  getById: async <T = unknown>(id: string): Promise<ApiResponse<T>> => {
+    return api.get<T>(`/parents/${id}`);
   },
 
-  create: async (data: any): Promise<ApiResponse<any>> => {
-    return api.post('/parents', data);
+  create: async <T = unknown>(data: unknown): Promise<ApiResponse<T>> => {
+    return api.post<T>('/parents', data);
   },
 
-  update: async (id: string, data: any): Promise<ApiResponse<any>> => {
-    return api.put(`/parents/${id}`, data);
+  update: async <T = unknown>(id: string, data: unknown): Promise<ApiResponse<T>> => {
+    return api.put<T>(`/parents/${id}`, data);
   },
 
   delete: async (id: string): Promise<ApiResponse<void>> => {
     return api.delete(`/parents/${id}`);
   },
 
-  getChildren: async (id: string): Promise<ApiResponse<any>> => {
-    return api.get(`/parents/${id}/children`);
+  getChildren: async <T = unknown>(id: string): Promise<ApiResponse<T>> => {
+    return api.get<T>(`/parents/${id}/children`);
   },
 
-  getChildrenFees: async (id: string): Promise<ApiResponse<any>> => {
-    return api.get(`/parents/${id}/children/fees`);
+  getChildrenFees: async <T = unknown>(id: string): Promise<ApiResponse<T>> => {
+    return api.get<T>(`/parents/${id}/children/fees`);
   },
 };
 
 // Fee Structures API
 export const feeStructuresApi = {
-  getAll: async (params?: any): Promise<ApiResponse<any>> => {
-    return api.get('/fee-structures', { params });
+  getAll: async <T = unknown>(params?: Record<string, unknown>): Promise<ApiResponse<T>> => {
+    return api.get<T>('/fee-structures', { params });
   },
 
-  getById: async (id: string): Promise<ApiResponse<any>> => {
-    return api.get(`/fee-structures/${id}`);
+  getById: async <T = unknown>(id: string): Promise<ApiResponse<T>> => {
+    return api.get<T>(`/fee-structures/${id}`);
   },
 
-  create: async (data: any): Promise<ApiResponse<any>> => {
-    return api.post('/fee-structures', data);
+  create: async <T = unknown>(data: unknown): Promise<ApiResponse<T>> => {
+    return api.post<T>('/fee-structures', data);
   },
 
-  update: async (id: string, data: any): Promise<ApiResponse<any>> => {
-    return api.put(`/fee-structures/${id}`, data);
+  update: async <T = unknown>(id: string, data: unknown): Promise<ApiResponse<T>> => {
+    return api.put<T>(`/fee-structures/${id}`, data);
   },
 
   delete: async (id: string): Promise<ApiResponse<void>> => {
     return api.delete(`/fee-structures/${id}`);
   },
 
-  assignToStudents: async (data: any): Promise<ApiResponse<any>> => {
+  assignToStudents: async <T = unknown>(data: { id: string; [key: string]: unknown }): Promise<ApiResponse<T>> => {
     const { id, ...assignData } = data;
-    return api.post(`/fee-structures/${id}/assign`, assignData);
+    return api.post<T>(`/fee-structures/${id}/assign`, assignData);
   },
 
-  getAssignments: async (params?: any): Promise<ApiResponse<any>> => {
-    return api.get('/fee-structures/assignments', { params });
+  getAssignments: async <T = unknown>(params?: Record<string, unknown>): Promise<ApiResponse<T>> => {
+    return api.get<T>('/fee-structures/assignments', { params });
   },
 
-  waiveAssignment: async (id: string, reason?: string): Promise<ApiResponse<any>> => {
-    return api.put(`/fee-structures/assignments/${id}/waive`, { reason });
+  waiveAssignment: async <T = unknown>(id: string, reason?: string): Promise<ApiResponse<T>> => {
+    return api.put<T>(`/fee-structures/assignments/${id}/waive`, { reason });
   },
 };
 
 // Fees API
 export const feesApi = {
-  getAll: async (params?: any): Promise<ApiResponse<any>> => {
-    return api.get('/fees', { params });
+  getAll: async <T = unknown>(params?: Record<string, unknown>): Promise<ApiResponse<T>> => {
+    return api.get<T>('/fees', { params });
   },
 
-  getById: async (id: string): Promise<ApiResponse<any>> => {
-    return api.get(`/fees/${id}`);
+  getById: async <T = unknown>(id: string): Promise<ApiResponse<T>> => {
+    return api.get<T>(`/fees/${id}`);
   },
 
-  getByStudent: async (studentId: string): Promise<ApiResponse<any>> => {
-    return api.get(`/fees/student/${studentId}`);
+  getByStudent: async <T = unknown>(studentId: string): Promise<ApiResponse<T>> => {
+    return api.get<T>(`/fees/student/${studentId}`);
   },
 
-  update: async (id: string, data: any): Promise<ApiResponse<any>> => {
-    return api.put(`/fees/${id}`, data);
+  update: async <T = unknown>(id: string, data: unknown): Promise<ApiResponse<T>> => {
+    return api.put<T>(`/fees/${id}`, data);
   },
 
   delete: async (id: string): Promise<ApiResponse<void>> => {
     return api.delete(`/fees/${id}`);
   },
 
-  getOutstanding: async (params?: any): Promise<ApiResponse<any>> => {
-    return api.get('/fees/outstanding', { params });
+  getOutstanding: async <T = unknown>(params?: Record<string, unknown>): Promise<ApiResponse<T>> => {
+    return api.get<T>('/fees/outstanding', { params });
   },
 
-  getOverdue: async (params?: any): Promise<ApiResponse<any>> => {
-    return api.get('/fees/overdue', { params });
+  getOverdue: async <T = unknown>(params?: Record<string, unknown>): Promise<ApiResponse<T>> => {
+    return api.get<T>('/fees/overdue', { params });
   },
 };
 
 // Payments API
 export const paymentsApi = {
-  getAll: async (params?: any): Promise<ApiResponse<any>> => {
-    return api.get('/payments', { params });
+  getAll: async <T = unknown>(params?: Record<string, unknown>): Promise<ApiResponse<T>> => {
+    return api.get<T>('/payments', { params });
   },
 
-  getById: async (id: string): Promise<ApiResponse<any>> => {
-    return api.get(`/payments/${id}`);
+  getById: async <T = unknown>(id: string): Promise<ApiResponse<T>> => {
+    return api.get<T>(`/payments/${id}`);
   },
 
-  create: async (data: any): Promise<ApiResponse<any>> => {
-    return api.post('/payments', data);
+  create: async <T = unknown>(data: unknown): Promise<ApiResponse<T>> => {
+    return api.post<T>('/payments', data);
   },
 
-  update: async (id: string, data: any): Promise<ApiResponse<any>> => {
-    return api.put(`/payments/${id}`, data);
+  update: async <T = unknown>(id: string, data: unknown): Promise<ApiResponse<T>> => {
+    return api.put<T>(`/payments/${id}`, data);
   },
 
   delete: async (id: string): Promise<ApiResponse<void>> => {
@@ -421,189 +420,189 @@ export const paymentsApi = {
     return api.download(`/payments/receipt/${id}`);
   },
 
-  generateReceipt: async (id: string): Promise<ApiResponse<any>> => {
-    return api.get(`/payments/receipt/${id}`);
+  generateReceipt: async <T = unknown>(id: string): Promise<ApiResponse<T>> => {
+    return api.get<T>(`/payments/receipt/${id}`);
   },
 
-  voidPayment: async (id: string, reason?: string): Promise<ApiResponse<any>> => {
-    return api.put(`/payments/${id}/void`, { reason });
+  voidPayment: async <T = unknown>(id: string, reason?: string): Promise<ApiResponse<T>> => {
+    return api.put<T>(`/payments/${id}/void`, { reason });
   },
 
-  getStats: async (params?: any): Promise<ApiResponse<any>> => {
-    return api.get('/payments/stats', { params });
+  getStats: async <T = unknown>(params?: Record<string, unknown>): Promise<ApiResponse<T>> => {
+    return api.get<T>('/payments/stats', { params });
   },
 
-  bulkImport: async (file: File): Promise<ApiResponse<any>> => {
-    return api.upload('/payments/bulk-import', file);
+  bulkImport: async <T = unknown>(file: File): Promise<ApiResponse<T>> => {
+    return api.upload<T>('/payments/bulk-import', file);
   },
 };
 
 // Classes API
 export const classesApi = {
-  getAll: async (params?: any): Promise<ApiResponse<any>> => {
-    return api.get('/classes', { params });
+  getAll: async <T = unknown>(params?: Record<string, unknown>): Promise<ApiResponse<T>> => {
+    return api.get<T>('/classes', { params });
   },
 
-  getById: async (id: string): Promise<ApiResponse<any>> => {
-    return api.get(`/classes/${id}`);
+  getById: async <T = unknown>(id: string): Promise<ApiResponse<T>> => {
+    return api.get<T>(`/classes/${id}`);
   },
 
-  create: async (data: any): Promise<ApiResponse<any>> => {
-    return api.post('/classes', data);
+  create: async <T = unknown>(data: unknown): Promise<ApiResponse<T>> => {
+    return api.post<T>('/classes', data);
   },
 
-  update: async (id: string, data: any): Promise<ApiResponse<any>> => {
-    return api.put(`/classes/${id}`, data);
+  update: async <T = unknown>(id: string, data: unknown): Promise<ApiResponse<T>> => {
+    return api.put<T>(`/classes/${id}`, data);
   },
 
   delete: async (id: string): Promise<ApiResponse<void>> => {
     return api.delete(`/classes/${id}`);
   },
 
-  getStudents: async (id: string): Promise<ApiResponse<any>> => {
-    return api.get(`/classes/${id}/students`);
+  getStudents: async <T = unknown>(id: string): Promise<ApiResponse<T>> => {
+    return api.get<T>(`/classes/${id}/students`);
   },
 };
 
 // Academic Years API
 export const academicYearsApi = {
-  getAll: async (params?: any): Promise<ApiResponse<any>> => {
-    return api.get('/academic-years', { params });
+  getAll: async <T = unknown>(params?: Record<string, unknown>): Promise<ApiResponse<T>> => {
+    return api.get<T>('/academic-years', { params });
   },
 
-  getById: async (id: string): Promise<ApiResponse<any>> => {
-    return api.get(`/academic-years/${id}`);
+  getById: async <T = unknown>(id: string): Promise<ApiResponse<T>> => {
+    return api.get<T>(`/academic-years/${id}`);
   },
 
-  create: async (data: any): Promise<ApiResponse<any>> => {
-    return api.post('/academic-years', data);
+  create: async <T = unknown>(data: unknown): Promise<ApiResponse<T>> => {
+    return api.post<T>('/academic-years', data);
   },
 
-  update: async (id: string, data: any): Promise<ApiResponse<any>> => {
-    return api.put(`/academic-years/${id}`, data);
+  update: async <T = unknown>(id: string, data: unknown): Promise<ApiResponse<T>> => {
+    return api.put<T>(`/academic-years/${id}`, data);
   },
 
   delete: async (id: string): Promise<ApiResponse<void>> => {
     return api.delete(`/academic-years/${id}`);
   },
 
-  getActive: async (): Promise<ApiResponse<any>> => {
-    return api.get('/academic-years/active');
+  getActive: async <T = unknown>(): Promise<ApiResponse<T>> => {
+    return api.get<T>('/academic-years/active');
   },
 };
 
 // Reports API
 export const reportsApi = {
-  getFeeCollection: async (params: any): Promise<ApiResponse<any>> => {
-    return api.get('/reports/fee-collection', { params });
+  getFeeCollection: async <T = unknown>(params: Record<string, unknown>): Promise<ApiResponse<T>> => {
+    return api.get<T>('/reports/fee-collection', { params });
   },
 
-  getOutstandingFees: async (params?: any): Promise<ApiResponse<any>> => {
-    return api.get('/reports/outstanding-fees', { params });
+  getOutstandingFees: async <T = unknown>(params?: Record<string, unknown>): Promise<ApiResponse<T>> => {
+    return api.get<T>('/reports/outstanding-fees', { params });
   },
 
-  getPaymentHistory: async (params: any): Promise<ApiResponse<any>> => {
-    return api.get('/reports/payment-history', { params });
+  getPaymentHistory: async <T = unknown>(params: Record<string, unknown>): Promise<ApiResponse<T>> => {
+    return api.get<T>('/reports/payment-history', { params });
   },
 
-  getDefaulters: async (params?: any): Promise<ApiResponse<any>> => {
-    return api.get('/reports/defaulters', { params });
+  getDefaulters: async <T = unknown>(params?: Record<string, unknown>): Promise<ApiResponse<T>> => {
+    return api.get<T>('/reports/defaulters', { params });
   },
 
-  exportReport: async (type: string, params: any, format: string): Promise<void> => {
+  exportReport: async (type: string, params: Record<string, unknown>, format: string): Promise<void> => {
     return api.download(`/reports/${type}/export`, `${type}-report.${format}`);
   },
 };
 
 // Dashboard API
 export const dashboardApi = {
-  getStats: async (): Promise<ApiResponse<any>> => {
-    return api.get('/dashboard/stats');
+  getStats: async <T = unknown>(): Promise<ApiResponse<T>> => {
+    return api.get<T>('/dashboard/stats');
   },
 
-  getRecentPayments: async (): Promise<ApiResponse<any>> => {
-    return api.get('/dashboard/recent-payments');
+  getRecentPayments: async <T = unknown>(): Promise<ApiResponse<T>> => {
+    return api.get<T>('/dashboard/recent-payments');
   },
 
-  getUpcomingDues: async (): Promise<ApiResponse<any>> => {
-    return api.get('/dashboard/upcoming-dues');
+  getUpcomingDues: async <T = unknown>(): Promise<ApiResponse<T>> => {
+    return api.get<T>('/dashboard/upcoming-dues');
   },
 
-  getCollectionTrends: async (): Promise<ApiResponse<any>> => {
-    return api.get('/dashboard/collection-trends');
+  getCollectionTrends: async <T = unknown>(): Promise<ApiResponse<T>> => {
+    return api.get<T>('/dashboard/collection-trends');
   },
 
-  getRecentActivities: async (): Promise<ApiResponse<any>> => {
-    return api.get('/dashboard/alerts');
+  getRecentActivities: async <T = unknown>(): Promise<ApiResponse<T>> => {
+    return api.get<T>('/dashboard/alerts');
   },
 
-  getMonthlyCollection: async (): Promise<ApiResponse<any>> => {
-    return api.get('/dashboard/collection-trends');
+  getMonthlyCollection: async <T = unknown>(): Promise<ApiResponse<T>> => {
+    return api.get<T>('/dashboard/collection-trends');
   },
 
-  getAlerts: async (): Promise<ApiResponse<any>> => {
-    return api.get('/dashboard/alerts');
+  getAlerts: async <T = unknown>(): Promise<ApiResponse<T>> => {
+    return api.get<T>('/dashboard/alerts');
   },
 };
 
 // Parent Portal API
 export const parentPortalApi = {
-  getSummary: async (): Promise<ApiResponse<any>> => {
-    return api.get('/parent/summary');
+  getSummary: async <T = unknown>(): Promise<ApiResponse<T>> => {
+    return api.get<T>('/parent/summary');
   },
 
-  getChildren: async (): Promise<ApiResponse<any>> => {
-    return api.get('/parent/children');
+  getChildren: async <T = unknown>(): Promise<ApiResponse<T>> => {
+    return api.get<T>('/parent/children');
   },
 
-  getChildProfile: async (childId: string): Promise<ApiResponse<any>> => {
-    return api.get(`/parent/children/${childId}`);
+  getChildProfile: async <T = unknown>(childId: string): Promise<ApiResponse<T>> => {
+    return api.get<T>(`/parent/children/${childId}`);
   },
 
-  getChildFees: async (childId: string, params?: any): Promise<ApiResponse<any>> => {
-    return api.get(`/parent/children/${childId}/fees`, { params });
+  getChildFees: async <T = unknown>(childId: string, params?: Record<string, unknown>): Promise<ApiResponse<T>> => {
+    return api.get<T>(`/parent/children/${childId}/fees`, { params });
   },
 
-  getChildPayments: async (childId: string, params?: any): Promise<ApiResponse<any>> => {
-    return api.get(`/parent/children/${childId}/payments`, { params });
+  getChildPayments: async <T = unknown>(childId: string, params?: Record<string, unknown>): Promise<ApiResponse<T>> => {
+    return api.get<T>(`/parent/children/${childId}/payments`, { params });
   },
 
-  getChildBalance: async (childId: string, params?: any): Promise<ApiResponse<any>> => {
-    return api.get(`/parent/children/${childId}/balance`, { params });
+  getChildBalance: async <T = unknown>(childId: string, params?: Record<string, unknown>): Promise<ApiResponse<T>> => {
+    return api.get<T>(`/parent/children/${childId}/balance`, { params });
   },
 
-  getChildStats: async (childId: string): Promise<ApiResponse<any>> => {
-    return api.get(`/parent/children/${childId}/stats`);
+  getChildStats: async <T = unknown>(childId: string): Promise<ApiResponse<T>> => {
+    return api.get<T>(`/parent/children/${childId}/stats`);
   },
 
-  getChildReceipt: async (childId: string, paymentId: string): Promise<ApiResponse<any>> => {
-    return api.get(`/parent/children/${childId}/receipt/${paymentId}`);
+  getChildReceipt: async <T = unknown>(childId: string, paymentId: string): Promise<ApiResponse<T>> => {
+    return api.get<T>(`/parent/children/${childId}/receipt/${paymentId}`);
   },
 };
 
 // Settings API
 export const settingsApi = {
-  getAppSettings: async (): Promise<ApiResponse<any>> => {
-    return api.get('/settings/app');
+  getAppSettings: async <T = unknown>(): Promise<ApiResponse<T>> => {
+    return api.get<T>('/settings/app');
   },
 
-  updateAppSettings: async (data: any): Promise<ApiResponse<any>> => {
-    return api.put('/settings/app', data);
+  updateAppSettings: async <T = unknown>(data: unknown): Promise<ApiResponse<T>> => {
+    return api.put<T>('/settings/app', data);
   },
 
-  getUserSettings: async (): Promise<ApiResponse<any>> => {
-    return api.get('/settings/user');
+  getUserSettings: async <T = unknown>(): Promise<ApiResponse<T>> => {
+    return api.get<T>('/settings/user');
   },
 
-  updateUserSettings: async (data: any): Promise<ApiResponse<any>> => {
-    return api.put('/settings/user', data);
+  updateUserSettings: async <T = unknown>(data: unknown): Promise<ApiResponse<T>> => {
+    return api.put<T>('/settings/user', data);
   },
 };
 
 // Notifications API
 export const notificationsApi = {
-  getAll: async (params?: any): Promise<ApiResponse<any>> => {
-    return api.get('/notifications', { params });
+  getAll: async <T = unknown>(params?: Record<string, unknown>): Promise<ApiResponse<T>> => {
+    return api.get<T>('/notifications', { params });
   },
 
   markAsRead: async (id: string): Promise<ApiResponse<void>> => {
@@ -620,26 +619,41 @@ export const notificationsApi = {
 };
 
 // Utility functions
-export const handleApiError = (error: any): string => {
-  if (error.response?.data?.message) {
-    return error.response.data.message;
+export const handleApiError = (error: unknown): string => {
+  if (error && typeof error === 'object' && 'response' in error) {
+    const axiosError = error as { response?: { data?: { message?: string } }; message?: string };
+    if (axiosError.response?.data?.message) {
+      return axiosError.response.data.message;
+    }
+    if (axiosError.message) {
+      return axiosError.message;
+    }
   }
-  if (error.message) {
+  if (error instanceof Error) {
     return error.message;
   }
   return 'An unexpected error occurred';
 };
 
-export const isNetworkError = (error: any): boolean => {
-  return !error.response && error.request;
+export const isNetworkError = (error: unknown): boolean => {
+  return error !== null && typeof error === 'object' && 'request' in error && !('response' in error);
 };
 
-export const isServerError = (error: any): boolean => {
-  return error.response?.status >= 500;
+export const isServerError = (error: unknown): boolean => {
+  if (error && typeof error === 'object' && 'response' in error) {
+    const axiosError = error as { response?: { status?: number } };
+    return (axiosError.response?.status ?? 0) >= 500;
+  }
+  return false;
 };
 
-export const isClientError = (error: any): boolean => {
-  return error.response?.status >= 400 && error.response?.status < 500;
+export const isClientError = (error: unknown): boolean => {
+  if (error && typeof error === 'object' && 'response' in error) {
+    const axiosError = error as { response?: { status?: number } };
+    const status = axiosError.response?.status ?? 0;
+    return status >= 400 && status < 500;
+  }
+  return false;
 };
 
 export default apiClient;
