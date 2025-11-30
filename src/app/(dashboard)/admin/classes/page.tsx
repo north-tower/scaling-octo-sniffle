@@ -58,10 +58,13 @@ type BackendClass = {
 
 // Transform backend class data to frontend format
 const transformClass = (backendClass: BackendClass): Class => {
+  const gradeValue = backendClass.grade ?? backendClass.grade_level ?? 1;
+  const grade = typeof gradeValue === 'number' ? gradeValue : parseInt(String(gradeValue), 10);
+  
   return {
     id: backendClass.id?.toString() || '',
     name: backendClass.name || '',
-    grade: parseInt(backendClass.grade || backendClass.grade_level || 1),
+    grade: isNaN(grade) ? 1 : grade,
     section: backendClass.section || '',
     academicYearId: backendClass.academic_year_id || backendClass.academicYearId || backendClass.academic_year || '',
     academicYear: backendClass.academic_year ? {

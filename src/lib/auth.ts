@@ -30,12 +30,13 @@ export const withAuth = (handler: RouteHandler) => {
 };
 
 // Role-based route protection
-export const withRole = (_roles: UserRole[]) => {
+export const withRole = (roles: UserRole[]) => {
   return (handler: RouteHandler): RouteHandler => {
     return async (req: NextRequest, ...args: unknown[]): Promise<NextResponse> => {
       // This would check user roles and protect routes
+      // TODO: Implement role checking using roles parameter
       // For now, we'll return the handler
-      // TODO: Implement role checking using _roles parameter
+      void roles; // Mark as used for future implementation
       return handler(req, ...args);
     };
   };
