@@ -1,22 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { 
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { BarChartComponent } from '@/components/charts/BarChart';
 import { PieChartComponent } from '@/components/charts/PieChart';
 import { LineChartComponent } from '@/components/charts/LineChart';
 import { 
   Download, 
   Calendar,
-  TrendingUp,
   DollarSign,
   FileText,
   Loader2,
@@ -35,7 +27,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { FormField } from '@/components/forms/FormField';
-import { Label } from '@/components/ui/label';
 import { useRouter } from 'next/navigation';
 import { formatCurrency } from '@/lib/utils';
 
@@ -100,14 +91,27 @@ export default function FeeCollectionPage() {
   ]);
 
   // Fetch fee collection data
-  const { loading, execute: fetchFeeCollection } = useApi(
-    (params: any) => reportsApi.getFeeCollection(params),
+  type FeeCollectionResponse = {
+    data: FeeCollectionData;
+  } | {
+    success: boolean;
+    data: FeeCollectionData;
+  } | FeeCollectionData;
+
+  const { loading, execute: fetchFeeCollection } = useApi<FeeCollectionResponse>(
+    (params: {
+      start_date?: string;
+      end_date?: string;
+      academic_year?: string;
+      class?: string;
+    }) => reportsApi.getFeeCollection(params),
     {
-      onSuccess: (response: any) => {
-        if (response?.data) {
+      onSuccess: (response) => {
+        if (response && typeof response === 'object' && 'data' in response) {
           setCollectionData(response.data);
-        } else if (response?.success && response?.data) {
-          setCollectionData(response.data);
+        } else if (response && typeof response === 'object' && 'summary' in response) {
+          // Direct FeeCollectionData object
+          setCollectionData(response as FeeCollectionData);
         }
       },
       onError: (error) => {
@@ -120,7 +124,12 @@ export default function FeeCollectionPage() {
 
   // Fetch data on mount and when filters change
   useEffect(() => {
-    const params: any = {};
+    const params: {
+      start_date?: string;
+      end_date?: string;
+      academic_year?: string;
+      class?: string;
+    } = {};
     if (startDate) params.start_date = startDate;
     if (endDate) params.end_date = endDate;
     if (academicYear && academicYear !== 'all') params.academic_year = academicYear;
