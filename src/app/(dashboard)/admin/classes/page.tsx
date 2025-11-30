@@ -61,15 +61,21 @@ const transformClass = (backendClass: BackendClass): Class => {
   const gradeValue = backendClass.grade ?? backendClass.grade_level ?? 1;
   const grade = typeof gradeValue === 'number' ? gradeValue : parseInt(String(gradeValue), 10);
   
+  // Handle academic_year which can be string or object
+  const academicYearId = backendClass.academic_year_id 
+    || backendClass.academicYearId 
+    || (typeof backendClass.academic_year === 'string' ? backendClass.academic_year : backendClass.academic_year?.id?.toString())
+    || '';
+  
   return {
     id: backendClass.id?.toString() || '',
     name: backendClass.name || '',
     grade: isNaN(grade) ? 1 : grade,
     section: backendClass.section || '',
-    academicYearId: backendClass.academic_year_id || backendClass.academicYearId || backendClass.academic_year || '',
-    academicYear: backendClass.academic_year ? {
-      id: backendClass.academic_year.id?.toString() || backendClass.academic_year || '',
-      name: backendClass.academic_year.name || backendClass.academic_year || '',
+    academicYearId,
+    academicYear: typeof backendClass.academic_year === 'object' && backendClass.academic_year ? {
+      id: backendClass.academic_year.id?.toString() || '',
+      name: backendClass.academic_year.name || '',
       startDate: backendClass.academic_year.start_date ? new Date(backendClass.academic_year.start_date) : new Date(),
       endDate: backendClass.academic_year.end_date ? new Date(backendClass.academic_year.end_date) : new Date(),
       isActive: backendClass.academic_year.is_active !== false,
