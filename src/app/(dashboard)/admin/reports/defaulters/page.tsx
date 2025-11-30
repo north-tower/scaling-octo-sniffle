@@ -7,24 +7,16 @@ import { Badge } from '@/components/ui/badge';
 import { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/tables/DataTable';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { 
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { BarChartComponent } from '@/components/charts/BarChart';
 import { PieChartComponent } from '@/components/charts/PieChart';
 import { 
   Download, 
-  AlertTriangle,
   DollarSign,
   Users,
   FileText,
   Loader2,
   ArrowLeft,
-  Filter,
-  Clock
+  Filter
 } from 'lucide-react';
 import { reportsApi } from '@/lib/api';
 import { useApi } from '@/hooks/useApi';
@@ -131,14 +123,26 @@ export default function DefaultersReportPage() {
   ]);
 
   // Fetch defaulters data
-  const { loading, execute: fetchDefaulters } = useApi(
-    (params: any) => reportsApi.getDefaulters(params),
+  type DefaultersResponse = {
+    data: DefaultersData;
+  } | {
+    success: boolean;
+    data: DefaultersData;
+  } | DefaultersData;
+
+  const { loading, execute: fetchDefaulters } = useApi<DefaultersResponse>(
+    (params: {
+      academic_year?: string;
+      class?: string;
+      days_overdue?: string;
+    }) => reportsApi.getDefaulters(params),
     {
-      onSuccess: (response: any) => {
-        if (response?.data) {
+      onSuccess: (response) => {
+        if (response && typeof response === 'object' && 'data' in response) {
           setDefaultersData(response.data);
-        } else if (response?.success && response?.data) {
-          setDefaultersData(response.data);
+        } else if (response && typeof response === 'object' && 'summary' in response) {
+          // Direct DefaultersData object
+          setDefaultersData(response as DefaultersData);
         }
       },
       onError: (error) => {
@@ -151,7 +155,11 @@ export default function DefaultersReportPage() {
 
   // Fetch data on mount and when filters change
   useEffect(() => {
-    const params: any = {};
+    const params: {
+      academic_year?: string;
+      class?: string;
+      days_overdue?: string;
+    } = {};
     if (academicYear && academicYear !== 'all') params.academic_year = academicYear;
     if (selectedClass && selectedClass !== 'all') params.class = selectedClass;
     if (daysOverdue) params.days_overdue = daysOverdue;
