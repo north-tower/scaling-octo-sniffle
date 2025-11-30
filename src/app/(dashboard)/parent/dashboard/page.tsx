@@ -5,12 +5,11 @@ import { StatsCard } from '@/components/shared/StatsCard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { 
   Users, 
   CreditCard, 
   DollarSign,
-  Calendar,
   Receipt,
   AlertTriangle,
   CheckCircle,
@@ -22,23 +21,89 @@ import { formatCurrency } from '@/lib/utils';
 import { format } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { ApiResponse } from '@/lib/types';
+
+interface ChildWithBalance {
+  id: string;
+  name?: string;
+  first_name?: string;
+  last_name?: string;
+  student_id?: string;
+  class?: string;
+  section?: string;
+  roll_number?: string;
+  outstandingBalance?: number;
+  overdueCount?: number;
+}
+
+interface SummaryData {
+  totalChildren?: number;
+  totalFees?: number;
+  totalPaid?: number;
+  totalOutstanding?: number;
+}
+
+interface PaymentWithChild {
+  id: string;
+  student_id: string;
+  amount_paid?: number;
+  amount?: number;
+  payment_method?: string;
+  payment_date?: string;
+  createdAt?: string;
+  childName: string;
+}
+
+interface DueWithChild {
+  id: string;
+  student_id: string;
+  balance_amount?: number;
+  amount?: number;
+  due_date?: string;
+  createdAt?: string;
+  is_overdue?: boolean;
+  childName: string;
+  feeStructure?: {
+    fee_type?: string;
+  };
+}
+
+type SummaryResponse = {
+  data: {
+    summary: SummaryData;
+    children: ChildWithBalance[];
+  };
+} | {
+  data: {
+    children: ChildWithBalance[];
+  };
+} | {
+  summary: SummaryData;
+  children: ChildWithBalance[];
+} | {
+  children: ChildWithBalance[];
+};
 
 export default function ParentDashboard() {
   const router = useRouter();
-  const [summary, setSummary] = useState<any>(null);
-  const [children, setChildren] = useState<any[]>([]);
-  const [recentPayments, setRecentPayments] = useState<any[]>([]);
-  const [upcomingDues, setUpcomingDues] = useState<any[]>([]);
+  const [summary, setSummary] = useState<SummaryData | null>(null);
+  const [children, setChildren] = useState<ChildWithBalance[]>([]);
+  const [recentPayments, setRecentPayments] = useState<PaymentWithChild[]>([]);
+  const [upcomingDues, setUpcomingDues] = useState<DueWithChild[]>([]);
 
   // Fetch summary data
-  const { loading: summaryLoading, execute: fetchSummary } = useApi(
+  const { loading: summaryLoading, execute: fetchSummary } = useApi<SummaryResponse>(
     () => parentPortalApi.getSummary(),
     {
-      onSuccess: (response: any) => {
-        const data = response?.data || response;
-        if (data) {
-          setSummary(data.summary || {});
-          setChildren(data.children || []);
+      onSuccess: (response) => {
+        const data = response && typeof response === 'object' && 'data' in response ? response.data : response;
+        if (data && typeof data === 'object') {
+          const summaryData: SummaryData = 'summary' in data && data.summary ? data.summary : {};
+          const childrenList: ChildWithBalance[] = Array.isArray(data) 
+            ? data 
+            : ('children' in data && Array.isArray(data.children) ? data.children : []);
+          setSummary(summaryData);
+          setChildren(childrenList);
         }
       },
       onError: (error) => {
@@ -48,25 +113,29 @@ export default function ParentDashboard() {
   );
 
   // Fetch recent payments for all children
-  const { loading: paymentsLoading, execute: fetchRecentPayments } = useApi(
-    async () => {
+  const { loading: paymentsLoading, execute: fetchRecentPayments } = useApi<PaymentWithChild[]>(
+    async (): Promise<ApiResponse<PaymentWithChild[]>> => {
       if (children.length === 0) return { success: true, data: [] };
       
       // Fetch payments for all children
-      const paymentPromises = children.map((child: any) =>
+      const paymentPromises = children.map((child) =>
         parentPortalApi.getChildPayments(child.id, { page: 1, limit: 3 })
       );
       
       const results = await Promise.all(paymentPromises);
-      const allPayments = results
-        .flatMap((result: any) => {
-          const payments = result?.data?.payments || result?.payments || [];
-          return payments.map((payment: any) => ({
+      const allPayments: PaymentWithChild[] = results
+        .flatMap((result) => {
+          const payments = (result && typeof result === 'object' && 'data' in result && result.data && typeof result.data === 'object' && 'payments' in result.data && Array.isArray(result.data.payments))
+            ? result.data.payments
+            : (result && typeof result === 'object' && 'payments' in result && Array.isArray(result.payments))
+            ? result.payments
+            : [];
+          return payments.map((payment: { id: string; student_id: string; [key: string]: unknown }) => ({
             ...payment,
-            childName: children.find((c: any) => c.id === payment.student_id)?.name || 'Unknown',
-          }));
+            childName: children.find((c) => c.id === payment.student_id)?.name || 'Unknown',
+          })) as PaymentWithChild[];
         })
-        .sort((a: any, b: any) => {
+        .sort((a, b) => {
           const dateA = new Date(a.payment_date || a.createdAt || 0);
           const dateB = new Date(b.payment_date || b.createdAt || 0);
           return dateB.getTime() - dateA.getTime();
@@ -76,9 +145,8 @@ export default function ParentDashboard() {
       return { success: true, data: allPayments };
     },
     {
-      onSuccess: (response: any) => {
-        const payments = response?.data || [];
-        setRecentPayments(payments);
+      onSuccess: (payments) => {
+        setRecentPayments(payments || []);
       },
       onError: (error) => {
         console.error('Failed to fetch recent payments:', error);
@@ -87,27 +155,31 @@ export default function ParentDashboard() {
   );
 
   // Fetch upcoming dues (balances) for all children
-  const { loading: duesLoading, execute: fetchUpcomingDues } = useApi(
-    async () => {
+  const { loading: duesLoading, execute: fetchUpcomingDues } = useApi<DueWithChild[]>(
+    async (): Promise<ApiResponse<DueWithChild[]>> => {
       if (children.length === 0) return { success: true, data: [] };
       
       // Fetch balances for all children
-      const balancePromises = children.map((child: any) =>
+      const balancePromises = children.map((child) =>
         parentPortalApi.getChildBalance(child.id)
       );
       
       const results = await Promise.all(balancePromises);
-      const allBalances = results
-        .flatMap((result: any) => {
-          const balances = result?.data?.balances || result?.balances || [];
+      const allBalances: DueWithChild[] = results
+        .flatMap((result) => {
+          const balances = (result && typeof result === 'object' && 'data' in result && result.data && typeof result.data === 'object' && 'balances' in result.data && Array.isArray(result.data.balances))
+            ? result.data.balances
+            : (result && typeof result === 'object' && 'balances' in result && Array.isArray(result.balances))
+            ? result.balances
+            : [];
           return balances
-            .filter((balance: any) => parseFloat(balance.balance_amount || 0) > 0)
-            .map((balance: any) => ({
+            .filter((balance: { balance_amount?: number | string }) => parseFloat(String(balance.balance_amount || 0)) > 0)
+            .map((balance: { id: string; student_id: string; [key: string]: unknown }) => ({
               ...balance,
-              childName: children.find((c: any) => c.id === balance.student_id)?.name || 'Unknown',
-            }));
+              childName: children.find((c) => c.id === balance.student_id)?.name || 'Unknown',
+            })) as DueWithChild[];
         })
-        .sort((a: any, b: any) => {
+        .sort((a, b) => {
           const dateA = new Date(a.due_date || a.createdAt || 0);
           const dateB = new Date(b.due_date || b.createdAt || 0);
           return dateA.getTime() - dateB.getTime();
@@ -117,9 +189,8 @@ export default function ParentDashboard() {
       return { success: true, data: allBalances };
     },
     {
-      onSuccess: (response: any) => {
-        const dues = response?.data || [];
-        setUpcomingDues(dues);
+      onSuccess: (dues) => {
+        setUpcomingDues(dues || []);
       },
       onError: (error) => {
         console.error('Failed to fetch upcoming dues:', error);
@@ -129,6 +200,7 @@ export default function ParentDashboard() {
 
   useEffect(() => {
     fetchSummary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -213,7 +285,7 @@ export default function ParentDashboard() {
             My Children
           </CardTitle>
           <CardDescription>
-            Overview of your children's fee status
+            Overview of your children&apos;s fee status
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -229,7 +301,7 @@ export default function ParentDashboard() {
             />
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
-              {children.map((child: any) => (
+              {children.map((child) => (
                 <div 
                   key={child.id} 
                   className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent cursor-pointer transition-colors"
@@ -251,7 +323,7 @@ export default function ParentDashboard() {
                   <div className="text-right">
                     <p className="font-medium">{formatCurrency(child.outstandingBalance || 0)}</p>
                     <p className="text-sm text-muted-foreground">
-                      {child.overdueCount > 0 ? `${child.overdueCount} overdue` : 'Pending'}
+                      {(child.overdueCount ?? 0) > 0 ? `${child.overdueCount} overdue` : 'Pending'}
                     </p>
                   </div>
                 </div>
@@ -287,7 +359,7 @@ export default function ParentDashboard() {
               />
             ) : (
               <div className="space-y-4">
-                {recentPayments.map((payment: any) => (
+                {recentPayments.map((payment) => (
                   <div 
                     key={payment.id} 
                     className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent cursor-pointer transition-colors"
@@ -347,7 +419,7 @@ export default function ParentDashboard() {
               />
             ) : (
               <div className="space-y-4">
-                {upcomingDues.map((due: any) => {
+                {upcomingDues.map((due) => {
                   const dueDate = due.due_date ? new Date(due.due_date) : null;
                   const isOverdue = due.is_overdue || (dueDate && dueDate < new Date() && !isNaN(dueDate.getTime()));
                   const feeType = due.feeStructure?.fee_type || 'Fee';
