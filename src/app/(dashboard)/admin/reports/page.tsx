@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +26,100 @@ import {
 import { reportsApi } from '@/lib/api';
 import { useApi } from '@/hooks/useApi';
 import { toast } from 'sonner';
+
+// Type definitions for report data
+interface FeeCollectionData {
+  summary: {
+    totalCollection: number;
+    totalTransactions: number;
+  };
+  collectionByFeeType: Array<{
+    fee_type: string;
+    count: number;
+    total: number;
+    dataValues?: {
+      fee_type: string;
+      total: number;
+    };
+  }>;
+  collectionByClass: Array<{
+    class: string;
+    count: number;
+    total: number;
+    dataValues?: {
+      class: string;
+      total: number;
+    };
+  }>;
+  monthlyCollection: Array<{
+    month: string;
+    count: number;
+    total: number;
+    dataValues?: {
+      month: string;
+      total: number;
+    };
+  }>;
+}
+
+interface OutstandingFeesData {
+  summary: {
+    totalOutstanding: number;
+    overdueCount: number;
+    totalStudents: number;
+    totalFees: number;
+  };
+  outstandingFees: Array<{
+    id: string;
+    student_id: string;
+    fee_structure_id: string;
+    total_amount: string;
+    paid_amount: string;
+    balance_amount: string;
+    due_date: string;
+    academic_year: string;
+    is_overdue: boolean;
+  }>;
+}
+
+interface DefaultersData {
+  summary: {
+    totalDefaulters: number;
+    totalOutstanding: number;
+    totalFees: number;
+  };
+  studentDefaulters: Array<{
+    student: {
+      id: string;
+      student_id: string;
+      first_name: string;
+      last_name: string;
+      class: string;
+      section: string;
+      roll_number: string;
+    };
+    totalOutstanding: number;
+    fees: Array<{
+      id: string;
+      student_id: string;
+      fee_structure_id: string;
+      total_amount: string;
+      paid_amount: string;
+      balance_amount: string;
+      due_date: string;
+      academic_year: string;
+      is_overdue: boolean;
+    }>;
+    maxDaysOverdue: number;
+  }>;
+}
+
+type ReportParams = {
+  start_date?: string;
+  end_date?: string;
+  academic_year?: string;
+  class?: string;
+};
 import {
   Dialog,
   DialogContent,
@@ -36,7 +129,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { FormField } from '@/components/forms/FormField';
-import { Label } from '@/components/ui/label';
 
 export default function ReportsPage() {
   const [startDate, setStartDate] = useState(() => {
@@ -51,15 +143,28 @@ export default function ReportsPage() {
   const [academicYear, setAcademicYear] = useState('');
   const [selectedClass, setSelectedClass] = useState('');
 
+  // Store fetched data
+  const [collectionData, setCollectionData] = useState<FeeCollectionData | null>(null);
+  const [outstandingData, setOutstandingData] = useState<OutstandingFeesData | null>(null);
+  const [defaultersData, setDefaultersData] = useState<DefaultersData | null>(null);
+
   // Fee Collection Report
-  const { loading: collectionLoading, execute: fetchFeeCollection } = useApi(
-    (params: any) => reportsApi.getFeeCollection(params),
+  type FeeCollectionResponse = {
+    data: FeeCollectionData;
+  } | {
+    success: boolean;
+    data: FeeCollectionData;
+  } | FeeCollectionData;
+
+  const { loading: collectionLoading, execute: fetchFeeCollection } = useApi<FeeCollectionResponse>(
+    (params: ReportParams) => reportsApi.getFeeCollection(params),
     {
-      onSuccess: (response: any) => {
-        if (response?.data) {
+      onSuccess: (response) => {
+        if (response && typeof response === 'object' && 'data' in response) {
           setCollectionData(response.data);
-        } else if (response?.success && response?.data) {
-          setCollectionData(response.data);
+        } else if (response && typeof response === 'object' && 'summary' in response) {
+          // Direct FeeCollectionData object
+          setCollectionData(response as FeeCollectionData);
         }
       },
       onError: (error) => {
@@ -70,14 +175,22 @@ export default function ReportsPage() {
   );
 
   // Outstanding Fees Report
-  const { loading: outstandingLoading, execute: fetchOutstanding } = useApi(
-    (params: any) => reportsApi.getOutstandingFees(params),
+  type OutstandingFeesResponse = {
+    data: OutstandingFeesData;
+  } | {
+    success: boolean;
+    data: OutstandingFeesData;
+  } | OutstandingFeesData;
+
+  const { loading: outstandingLoading, execute: fetchOutstanding } = useApi<OutstandingFeesResponse>(
+    (params: ReportParams) => reportsApi.getOutstandingFees(params),
     {
-      onSuccess: (response: any) => {
-        if (response?.data) {
+      onSuccess: (response) => {
+        if (response && typeof response === 'object' && 'data' in response) {
           setOutstandingData(response.data);
-        } else if (response?.success && response?.data) {
-          setOutstandingData(response.data);
+        } else if (response && typeof response === 'object' && 'summary' in response) {
+          // Direct OutstandingFeesData object
+          setOutstandingData(response as OutstandingFeesData);
         }
       },
       onError: (error) => {
@@ -88,14 +201,22 @@ export default function ReportsPage() {
   );
 
   // Defaulters Report
-  const { loading: defaultersLoading, execute: fetchDefaulters } = useApi(
-    (params: any) => reportsApi.getDefaulters(params),
+  type DefaultersResponse = {
+    data: DefaultersData;
+  } | {
+    success: boolean;
+    data: DefaultersData;
+  } | DefaultersData;
+
+  const { loading: defaultersLoading, execute: fetchDefaulters } = useApi<DefaultersResponse>(
+    (params: ReportParams) => reportsApi.getDefaulters(params),
     {
-      onSuccess: (response: any) => {
-        if (response?.data) {
+      onSuccess: (response) => {
+        if (response && typeof response === 'object' && 'data' in response) {
           setDefaultersData(response.data);
-        } else if (response?.success && response?.data) {
-          setDefaultersData(response.data);
+        } else if (response && typeof response === 'object' && 'summary' in response) {
+          // Direct DefaultersData object
+          setDefaultersData(response as DefaultersData);
         }
       },
       onError: (error) => {
@@ -107,7 +228,7 @@ export default function ReportsPage() {
 
   // Fetch data on mount and when filters change
   useEffect(() => {
-    const params: any = {
+    const params: ReportParams = {
       start_date: startDate,
       end_date: endDate,
     };
@@ -120,22 +241,17 @@ export default function ReportsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDate, endDate, academicYear, selectedClass]);
 
-  // Store fetched data
-  const [collectionData, setCollectionData] = useState<any>(null);
-  const [outstandingData, setOutstandingData] = useState<any>(null);
-  const [defaultersData, setDefaultersData] = useState<any>(null);
-
   // Transform data for charts
   const monthlyCollectionData = useMemo(() => {
     if (!collectionData?.monthlyCollection) return [];
     
-    return collectionData.monthlyCollection.map((item: any) => {
+    return collectionData.monthlyCollection.map((item) => {
       const month = item.month || item.dataValues?.month || 'Unknown';
-      const total = parseFloat(item.total || item.dataValues?.total || 0);
+      const total = parseFloat(String(item.total || item.dataValues?.total || 0));
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       const monthIndex = typeof month === 'string' && month.includes('-') 
         ? parseInt(month.split('-')[1]) - 1 
-        : parseInt(month) - 1;
+        : parseInt(String(month)) - 1;
       
       return {
         name: monthNames[monthIndex] || month,
@@ -148,9 +264,9 @@ export default function ReportsPage() {
     if (!collectionData?.collectionByFeeType) return [];
     
     const colors = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FFC658'];
-    return collectionData.collectionByFeeType.map((item: any, index: number) => {
+    return collectionData.collectionByFeeType.map((item, index: number) => {
       const feeType = item.fee_type || item.dataValues?.fee_type || 'Unknown';
-      const total = parseFloat(item.total || item.dataValues?.total || 0);
+      const total = parseFloat(String(item.total || item.dataValues?.total || 0));
       
       return {
         name: feeType.charAt(0).toUpperCase() + feeType.slice(1),
@@ -163,9 +279,9 @@ export default function ReportsPage() {
   const classWiseData = useMemo(() => {
     if (!collectionData?.collectionByClass) return [];
     
-    return collectionData.collectionByClass.map((item: any) => {
+    return collectionData.collectionByClass.map((item) => {
       const className = item.class || item.dataValues?.class || 'Unknown';
-      const total = parseFloat(item.total || item.dataValues?.total || 0);
+      const total = parseFloat(String(item.total || item.dataValues?.total || 0));
       
       return {
         name: `Class ${className}`,
@@ -197,7 +313,7 @@ export default function ReportsPage() {
 
   const handleGenerateReport = async (reportType: string) => {
     try {
-      const params: any = {
+      const params: ReportParams = {
         start_date: startDate,
         end_date: endDate,
       };
@@ -208,14 +324,14 @@ export default function ReportsPage() {
       switch (reportType) {
         case 'fee-collection':
           response = await reportsApi.getFeeCollection(params);
-          if (response.success) {
+          if (response && typeof response === 'object' && 'success' in response && response.success && 'data' in response) {
             setCollectionData(response.data);
             toast.success('Fee collection report generated');
           }
           break;
         case 'outstanding-fees':
           response = await reportsApi.getOutstandingFees(params);
-          if (response.success) {
+          if (response && typeof response === 'object' && 'success' in response && response.success && 'data' in response) {
             setOutstandingData(response.data);
             toast.success('Outstanding fees report generated');
           }
@@ -225,7 +341,7 @@ export default function ReportsPage() {
           break;
         case 'defaulters':
           response = await reportsApi.getDefaulters(params);
-          if (response.success) {
+          if (response && typeof response === 'object' && 'success' in response && response.success && 'data' in response) {
             setDefaultersData(response.data);
             toast.success('Defaulters report generated');
           }
@@ -233,15 +349,16 @@ export default function ReportsPage() {
         default:
           toast.error('Unknown report type');
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to generate report:', error);
-      toast.error(error?.message || 'Failed to generate report');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate report';
+      toast.error(errorMessage);
     }
   };
 
   const handleExportReport = async (reportType: string, format: string) => {
     try {
-      const params: any = {
+      const params: ReportParams = {
         start_date: startDate,
         end_date: endDate,
       };
@@ -250,9 +367,10 @@ export default function ReportsPage() {
 
       await reportsApi.exportReport(reportType, params, format);
       toast.success(`Report exported as ${format.toUpperCase()}`);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to export report:', error);
-      toast.error(error?.message || 'Failed to export report');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to export report';
+      toast.error(errorMessage);
     }
   };
 
