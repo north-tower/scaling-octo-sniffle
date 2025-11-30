@@ -39,7 +39,6 @@ import {
   Search,
   Settings2,
   Download,
-  Filter,
 } from 'lucide-react';
 
 interface DataTableProps<TData, TValue> {
@@ -61,7 +60,6 @@ interface DataTableProps<TData, TValue> {
 export function DataTable<TData, TValue>({
   columns,
   data,
-  searchKey,
   searchPlaceholder = 'Search...',
   showSearch = true,
   showColumnToggle = true,

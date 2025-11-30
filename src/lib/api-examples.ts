@@ -10,12 +10,8 @@ import {
   studentsApi,
   paymentsApi,
   feeStructuresApi,
-  feesApi,
   dashboardApi,
   reportsApi,
-  classesApi,
-  academicYearsApi,
-  parentsApi,
 } from './api';
 
 // ============================================
@@ -405,17 +401,17 @@ export const testConnection = async () => {
   try {
     // Test 1: Login
     console.log('\n1. Testing login...');
-    const loginResponse = await authApi.login('admin@school.com', 'admin123');
+    await authApi.login('admin@school.com', 'admin123');
     console.log('✓ Login successful');
 
     // Test 2: Get dashboard stats
     console.log('\n2. Testing dashboard stats...');
-    const statsResponse = await dashboardApi.getStats();
+    await dashboardApi.getStats();
     console.log('✓ Dashboard stats retrieved');
 
     // Test 3: Get students
     console.log('\n3. Testing get students...');
-    const studentsResponse = await studentsApi.getAll({ page: 1, limit: 10 });
+    await studentsApi.getAll({ page: 1, limit: 10 });
     console.log('✓ Students retrieved');
 
     console.log('\n✓ All tests passed! Backend connection is working.');
