@@ -10,7 +10,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { FormField } from '@/components/forms/FormField';
 import { School, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
@@ -40,7 +39,7 @@ export default function LoginPage() {
         // Will be set after login completes
         // The redirect will happen in the useEffect below
       }
-    } catch (error) {
+    } catch {
       // Error is handled by the auth store
     }
   };

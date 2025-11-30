@@ -4,9 +4,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { ApiResponse, ApiError } from '@/lib/types';
 
-interface UseApiOptions {
+interface UseApiOptions<T = unknown> {
   immediate?: boolean;
-  onSuccess?: (data: any) => void;
+  onSuccess?: (data: T) => void;
   onError?: (error: ApiError) => void;
 }
 
@@ -14,13 +14,13 @@ interface UseApiReturn<T> {
   data: T | null;
   loading: boolean;
   error: ApiError | null;
-  execute: (...args: any[]) => Promise<T | null>;
+  execute: (...args: unknown[]) => Promise<T | null>;
   reset: () => void;
 }
 
-export function useApi<T = any>(
-  apiFunction: (...args: any[]) => Promise<ApiResponse<T>>,
-  options: UseApiOptions = {}
+export function useApi<T = unknown>(
+  apiFunction: (...args: unknown[]) => Promise<ApiResponse<T>>,
+  options: UseApiOptions<T> = {}
 ): UseApiReturn<T> {
   const { immediate = false, onSuccess, onError } = options;
   
@@ -28,7 +28,7 @@ export function useApi<T = any>(
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
 
-  const execute = useCallback(async (...args: any[]): Promise<T | null> => {
+  const execute = useCallback(async (...args: unknown[]): Promise<T | null> => {
     setLoading(true);
     setError(null);
 
@@ -42,12 +42,13 @@ export function useApi<T = any>(
       } else {
         throw new Error(response.message || 'API call failed');
       }
-    } catch (err: any) {
+    } catch (err) {
+      const error = err as { message?: string; code?: string; details?: unknown; statusCode?: number };
       const apiError: ApiError = {
-        message: err.message || 'An error occurred',
-        code: err.code,
-        details: err.details,
-        statusCode: err.statusCode || 500,
+        message: error.message || 'An error occurred',
+        code: error.code,
+        details: error.details,
+        statusCode: error.statusCode || 500,
       };
       
       setError(apiError);
@@ -86,25 +87,27 @@ export function useApi<T = any>(
 }
 
 // Hook for paginated data
-interface UsePaginatedApiOptions extends UseApiOptions {
+interface PaginationData {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+interface UsePaginatedApiOptions<T = unknown> extends UseApiOptions<T[]> {
   pageSize?: number;
 }
 
 interface UsePaginatedApiReturn<T> extends UseApiReturn<T[]> {
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
+  pagination: PaginationData;
   setPage: (page: number) => void;
   setLimit: (limit: number) => void;
   refresh: () => void;
 }
 
-export function usePaginatedApi<T = any>(
-  apiFunction: (params: any) => Promise<ApiResponse<{ data: T[]; pagination: any }>>,
-  options: UsePaginatedApiOptions = {}
+export function usePaginatedApi<T = unknown>(
+  apiFunction: (params: Record<string, unknown>) => Promise<ApiResponse<{ data: T[]; pagination: PaginationData }>>,
+  options: UsePaginatedApiOptions<T> = {}
 ): UsePaginatedApiReturn<T> {
   const { pageSize = 10, ...apiOptions } = options;
   
@@ -117,13 +120,17 @@ export function usePaginatedApi<T = any>(
     totalPages: 0,
   });
 
-  const { data, loading, error, execute, reset } = useApi(
-    (params: any) => apiFunction({ ...params, page, limit }),
+  const { data, loading, error, execute, reset } = useApi<{ data: T[]; pagination: PaginationData }>(
+    (params: Record<string, unknown>) => apiFunction({ ...params, page, limit }),
     {
       ...apiOptions,
-      onSuccess: (response: any) => {
-        setPagination(response.pagination);
-        apiOptions.onSuccess?.(response.data);
+      onSuccess: (response) => {
+        if (response?.pagination) {
+          setPagination(response.pagination);
+        }
+        if (response?.data) {
+          apiOptions.onSuccess?.(response.data);
+        }
       },
     }
   );
@@ -155,8 +162,8 @@ export function usePaginatedApi<T = any>(
 }
 
 // Hook for form submission
-interface UseFormApiOptions {
-  onSuccess?: (data: any) => void;
+interface UseFormApiOptions<TResponse = unknown> {
+  onSuccess?: (data: TResponse) => void;
   onError?: (error: ApiError) => void;
   successMessage?: string;
 }
@@ -168,9 +175,9 @@ interface UseFormApiReturn<T> {
   reset: () => void;
 }
 
-export function useFormApi<T = any>(
-  apiFunction: (data: T) => Promise<ApiResponse<any>>,
-  options: UseFormApiOptions = {}
+export function useFormApi<T = unknown, TResponse = unknown>(
+  apiFunction: (data: T) => Promise<ApiResponse<TResponse>>,
+  options: UseFormApiOptions<TResponse> = {}
 ): UseFormApiReturn<T> {
   const { onSuccess, onError, successMessage } = options;
   
@@ -193,12 +200,13 @@ export function useFormApi<T = any>(
       } else {
         throw new Error(response.message || 'Form submission failed');
       }
-    } catch (err: any) {
+    } catch (err) {
+      const error = err as { message?: string; code?: string; details?: unknown; statusCode?: number };
       const apiError: ApiError = {
-        message: err.message || 'An error occurred',
-        code: err.code,
-        details: err.details,
-        statusCode: err.statusCode || 500,
+        message: error.message || 'An error occurred',
+        code: error.code,
+        details: error.details,
+        statusCode: error.statusCode || 500,
       };
       
       setError(apiError);

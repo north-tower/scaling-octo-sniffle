@@ -8,6 +8,7 @@ import { paymentsApi, studentsApi, feeStructuresApi } from '@/lib/api';
 import { useApi } from '@/hooks/useApi';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import type { BackendStudent, BackendFeeStructure, ApiResponse } from '@/lib/types';
 import {
   Dialog,
   DialogContent,
@@ -26,9 +27,8 @@ export default function RecordPaymentPage() {
   const router = useRouter();
   const [students, setStudents] = useState<Array<{ id: string; name: string }>>([]);
   const [feeStructures, setFeeStructures] = useState<Array<{ id: string; name: string; amount: number }>>([]);
-  const [selectedStudent, setSelectedStudent] = useState<string>('');
   const [selectedFeeStructure, setSelectedFeeStructure] = useState<string>('');
-  const [selectedFeeStructureDetails, setSelectedFeeStructureDetails] = useState<any>(null);
+  const [selectedFeeStructureDetails, setSelectedFeeStructureDetails] = useState<BackendFeeStructure | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
 
@@ -53,17 +53,17 @@ export default function RecordPaymentPage() {
   const { loading: studentsLoading, execute: fetchStudents } = useApi(
     () => studentsApi.getAll({ limit: 100 }),
     {
-      onSuccess: (response: any) => {
-        let studentsData = [];
-        if (response?.students) {
+      onSuccess: (response: ApiResponse<{ students: BackendStudent[] }> | ApiResponse<BackendStudent[]> | { students: BackendStudent[] } | { data: { students: BackendStudent[] } } | { data: BackendStudent[] }) => {
+        let studentsData: BackendStudent[] = [];
+        if ('students' in response && Array.isArray(response.students)) {
           studentsData = response.students;
-        } else if (response?.data?.students) {
+        } else if ('data' in response && 'students' in response.data && Array.isArray(response.data.students)) {
           studentsData = response.data.students;
-        } else if (response?.data && Array.isArray(response.data)) {
+        } else if ('data' in response && Array.isArray(response.data)) {
           studentsData = response.data;
         }
 
-        const formatted = studentsData.map((s: any) => ({
+        const formatted = studentsData.map((s: BackendStudent) => ({
           id: s.id?.toString() || '',
           name: `${s.first_name || ''} ${s.last_name || ''} (${s.student_id || ''}) - Class ${s.class || ''}`,
         }));
@@ -75,20 +75,20 @@ export default function RecordPaymentPage() {
   const { loading: feeStructuresLoading, execute: fetchFeeStructures } = useApi(
     () => feeStructuresApi.getAll({ limit: 100 }),
     {
-      onSuccess: (response: any) => {
-        let feeStructuresData = [];
-        if (response?.feeStructures) {
+      onSuccess: (response: ApiResponse<{ feeStructures: BackendFeeStructure[] }> | ApiResponse<BackendFeeStructure[]> | { feeStructures: BackendFeeStructure[] } | { data: { feeStructures: BackendFeeStructure[] } } | { data: BackendFeeStructure[] }) => {
+        let feeStructuresData: BackendFeeStructure[] = [];
+        if ('feeStructures' in response && Array.isArray(response.feeStructures)) {
           feeStructuresData = response.feeStructures;
-        } else if (response?.data?.feeStructures) {
+        } else if ('data' in response && 'feeStructures' in response.data && Array.isArray(response.data.feeStructures)) {
           feeStructuresData = response.data.feeStructures;
-        } else if (response?.data && Array.isArray(response.data)) {
+        } else if ('data' in response && Array.isArray(response.data)) {
           feeStructuresData = response.data;
         }
 
-        const formatted = feeStructuresData.map((fs: any) => ({
+        const formatted = feeStructuresData.map((fs: BackendFeeStructure) => ({
           id: fs.id?.toString() || '',
-          name: `${fs.fee_type || 'Fee'} - Class ${fs.class || ''} - KES ${parseFloat(fs.amount || 0).toLocaleString()}`,
-          amount: parseFloat(fs.amount || 0),
+          name: `${fs.fee_type || 'Fee'} - Class ${fs.class || ''} - KES ${parseFloat(fs.amount || '0').toLocaleString()}`,
+          amount: parseFloat(fs.amount || '0'),
         }));
         setFeeStructures(formatted);
       },
@@ -127,7 +127,7 @@ export default function RecordPaymentPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFeeStructure]);
 
-  const handleFieldChange = (field: string, value: any) => {
+  const handleFieldChange = (field: string, value: string | number) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (formErrors[field]) {
       setFormErrors((prev) => {
@@ -177,7 +177,19 @@ export default function RecordPaymentPage() {
 
     try {
       // Transform to backend format
-      const backendData: any = {
+      const backendData: {
+        student_id: number;
+        fee_structure_id: number;
+        amount_paid: number;
+        payment_method: string;
+        payment_date: string;
+        transaction_id?: string;
+        notes?: string;
+        bank_reference?: string;
+        cheque_number?: string;
+        cheque_date?: string;
+        bank_name?: string;
+      } = {
         student_id: parseInt(formData.student_id),
         fee_structure_id: parseInt(formData.fee_structure_id),
         amount_paid: parseFloat(formData.amount_paid),
@@ -211,16 +223,16 @@ export default function RecordPaymentPage() {
           cheque_date: '',
           bank_name: '',
         });
-        setSelectedStudent('');
         setSelectedFeeStructure('');
         setSelectedFeeStructureDetails(null);
         setFormErrors({});
         // Optionally redirect to payments list
         // router.push('/admin/payments');
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to create payment:', error);
-      toast.error(error?.message || 'Failed to record payment');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to record payment';
+      toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
     }

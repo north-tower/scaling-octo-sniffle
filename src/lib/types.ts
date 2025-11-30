@@ -320,7 +320,67 @@ export type SearchParams = {
   search?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
-  filters?: Record<string, any>;
+  filters?: Record<string, unknown>;
+};
+
+// Backend API Response Types (matching backend structure)
+export type BackendStudent = {
+  id: number;
+  student_id: string;
+  first_name: string;
+  last_name: string;
+  class: string;
+  section: string;
+  roll_number: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  parent_id?: number;
+  user_id?: number;
+  admission_date: string;
+  status: 'active' | 'inactive' | 'graduated' | 'transferred';
+  date_of_birth?: string;
+  gender?: 'male' | 'female' | 'other';
+  blood_group?: string;
+  emergency_contact?: string;
+  emergency_contact_name?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BackendFeeStructure = {
+  id: number;
+  class: string;
+  fee_type: string;
+  amount: string;
+  academic_year: string;
+  due_date: string;
+  late_fee_amount?: string;
+  description?: string;
+  is_mandatory: boolean;
+  is_active: boolean;
+  created_by?: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BackendPayment = {
+  id: number;
+  student_id: number;
+  fee_structure_id: number;
+  amount_paid: string;
+  payment_method: string;
+  payment_date: string;
+  transaction_id?: string;
+  notes?: string;
+  bank_reference?: string;
+  cheque_number?: string;
+  cheque_date?: string;
+  bank_name?: string;
+  receipt_number?: string;
+  received_by?: number;
+  created_at: string;
+  updated_at: string;
 };
 
 // Authentication Types
