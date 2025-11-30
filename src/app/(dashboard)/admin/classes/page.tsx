@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/tables/DataTable';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal, Eye, Edit, Trash2, Plus, BookOpen, Loader2, Search, Users } from 'lucide-react';
-import { Class, BackendStudent, ApiResponse, ApiError, PaginatedResponse } from '@/lib/types';
+import { Class, BackendStudent, ApiError } from '@/lib/types';
 import { classesApi } from '@/lib/api';
 import { useApi } from '@/hooks/useApi';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -254,7 +254,7 @@ export default function ClassesPage() {
     setIsAddDialogOpen(true);
   };
 
-  const handleEdit = (cls: Class) => {
+  const handleEdit = useCallback((cls: Class) => {
     setFormData({
       name: cls.name,
       grade: cls.grade,
@@ -263,24 +263,24 @@ export default function ClassesPage() {
     });
     setSelectedClass(cls);
     setIsEditDialogOpen(true);
-  };
+  }, []);
 
-  const handleView = (cls: Class) => {
+  const handleView = useCallback((cls: Class) => {
     setSelectedClass(cls);
     setIsViewDialogOpen(true);
-  };
+  }, []);
 
-  const handleViewStudents = (cls: Class) => {
+  const handleViewStudents = useCallback((cls: Class) => {
     setSelectedClass(cls);
     setIsStudentsDialogOpen(true);
     fetchClassStudents(cls.id);
-  };
+  }, [fetchClassStudents]);
 
-  const handleDelete = (cls: Class) => {
+  const handleDelete = useCallback((cls: Class) => {
     if (window.confirm(`Are you sure you want to delete ${cls.name}?`)) {
       deleteClass(cls.id);
     }
-  };
+  }, [deleteClass]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
