@@ -5,21 +5,19 @@ import { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/tables/DataTable';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal, Eye, ArrowLeft, Loader2, Search, AlertTriangle, DollarSign, Users, FileText } from 'lucide-react';
 import { reportsApi } from '@/lib/api';
 import { useApi } from '@/hooks/useApi';
 import { useDebounce } from '@/hooks/useDebounce';
-import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { useRouter } from 'next/navigation';
 import { FormField } from '@/components/forms/FormField';
@@ -63,7 +61,7 @@ interface OutstandingFeesSummary {
 export default function OutstandingFeesPage() {
   const router = useRouter();
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
+  const [limit] = useState(10);
   const [search, setSearch] = useState('');
   const [outstandingFees, setOutstandingFees] = useState<OutstandingFee[]>([]);
   const [summary, setSummary] = useState<OutstandingFeesSummary>({
@@ -72,7 +70,12 @@ export default function OutstandingFeesPage() {
     totalStudents: 0,
     totalFees: 0,
   });
-  const [pagination, setPagination] = useState<any>(null);
+  const [pagination, setPagination] = useState<{
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  } | null>(null);
   const [localSearch, setLocalSearch] = useState('');
   const [filterClass, setFilterClass] = useState('');
   const [filterAcademicYear, setFilterAcademicYear] = useState('');
@@ -104,25 +107,64 @@ export default function OutstandingFeesPage() {
   const debouncedSearch = useDebounce(search, 500);
 
   // Fetch outstanding fees
-  const { loading, execute: fetchOutstandingFees } = useApi(
-    (params: any) => reportsApi.getOutstandingFees(params),
-    {
-      onSuccess: (response: any) => {
-        let feesData = [];
-        let summaryData = null;
+  type OutstandingFeesResponse = {
+    outstandingFees: OutstandingFee[];
+    summary?: {
+      totalOutstanding: string | number;
+      overdueCount: number;
+      totalStudents: number;
+      totalFees: number;
+    };
+    pagination?: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
+  } | {
+    data: {
+      outstandingFees: OutstandingFee[];
+      summary?: {
+        totalOutstanding: string | number;
+        overdueCount: number;
+        totalStudents: number;
+        totalFees: number;
+      };
+      pagination?: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+      };
+    };
+  } | {
+    data: OutstandingFee[];
+  } | OutstandingFee[];
 
-        if (response?.outstandingFees) {
+  const { loading, execute: fetchOutstandingFees } = useApi<OutstandingFeesResponse>(
+    (params: { page?: number; limit?: number; search?: string; class?: string; academic_year?: string; is_overdue?: boolean }) => reportsApi.getOutstandingFees(params),
+    {
+      onSuccess: (response) => {
+        let feesData: OutstandingFee[] = [];
+        let summaryData: {
+          totalOutstanding: string | number;
+          overdueCount: number;
+          totalStudents: number;
+          totalFees: number;
+        } | null = null;
+
+        if (response && typeof response === 'object' && 'outstandingFees' in response && Array.isArray(response.outstandingFees)) {
           feesData = response.outstandingFees;
-          summaryData = response.summary;
-        } else if (response?.data) {
-          if (response.data.outstandingFees) {
-            feesData = response.data.outstandingFees;
-            summaryData = response.data.summary;
-          } else if (Array.isArray(response.data)) {
+          summaryData = response.summary || null;
+        } else if (response && typeof response === 'object' && 'data' in response) {
+          if (Array.isArray(response.data)) {
             feesData = response.data;
-          } else if (response.data.data) {
+          } else if (response.data && typeof response.data === 'object' && 'outstandingFees' in response.data && Array.isArray(response.data.outstandingFees)) {
+            feesData = response.data.outstandingFees;
+            summaryData = response.data.summary || null;
+          } else if (response.data && typeof response.data === 'object' && 'data' in response.data && Array.isArray(response.data.data)) {
             feesData = response.data.data;
-            summaryData = response.data.summary;
+            summaryData = response.data.summary || null;
           }
         } else if (Array.isArray(response)) {
           feesData = response;
@@ -132,7 +174,7 @@ export default function OutstandingFeesPage() {
 
         if (summaryData) {
           setSummary({
-            totalOutstanding: parseFloat(summaryData.totalOutstanding || 0),
+            totalOutstanding: parseFloat(String(summaryData.totalOutstanding)) || 0,
             overdueCount: summaryData.overdueCount || 0,
             totalStudents: summaryData.totalStudents || 0,
             totalFees: summaryData.totalFees || feesData.length,
@@ -140,7 +182,7 @@ export default function OutstandingFeesPage() {
         } else {
           // Calculate summary from data
           const totalOutstanding = feesData.reduce(
-            (sum: number, fee: OutstandingFee) => sum + parseFloat(fee.balance_amount || 0),
+            (sum: number, fee: OutstandingFee) => sum + parseFloat(fee.balance_amount || '0'),
             0
           );
           const overdueCount = feesData.filter((fee: OutstandingFee) => fee.is_overdue).length;
@@ -153,6 +195,13 @@ export default function OutstandingFeesPage() {
             totalFees: feesData.length,
           });
         }
+
+        // Set pagination if available in response
+        if (response && typeof response === 'object' && 'pagination' in response && response.pagination) {
+          setPagination(response.pagination);
+        } else if (response && typeof response === 'object' && 'data' in response && response.data && typeof response.data === 'object' && 'pagination' in response.data && response.data.pagination) {
+          setPagination(response.data.pagination);
+        }
       },
       onError: (error) => {
         console.error('Failed to fetch outstanding fees:', error);
@@ -163,7 +212,14 @@ export default function OutstandingFeesPage() {
 
   // Fetch on mount and when params change
   useEffect(() => {
-    const params: any = {
+    const params: {
+      page: number;
+      limit: number;
+      search: string;
+      class?: string;
+      academic_year?: string;
+      is_overdue?: boolean;
+    } = {
       page,
       limit,
       search: debouncedSearch,

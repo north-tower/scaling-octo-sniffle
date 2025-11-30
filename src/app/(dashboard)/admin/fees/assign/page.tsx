@@ -18,7 +18,7 @@ import { MoreHorizontal, Plus, BookOpen, Loader2, Search, ArrowLeft, Shield } fr
 import { feeStructuresApi } from '@/lib/api';
 import { useApi } from '@/hooks/useApi';
 import { useDebounce } from '@/hooks/useDebounce';
-import { BackendFeeStructure, ApiError } from '@/lib/types';
+import { BackendFeeStructure } from '@/lib/types';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { useRouter } from 'next/navigation';
