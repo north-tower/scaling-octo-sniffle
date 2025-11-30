@@ -20,13 +20,10 @@ import {
   CreditCard,
   Receipt,
   DollarSign,
-  AlertTriangle,
   MoreHorizontal,
   Search,
   Loader2,
-  GraduationCap,
-  FileText,
-  TrendingUp
+  GraduationCap
 } from 'lucide-react';
 import { parentPortalApi } from '@/lib/api';
 import { useApi } from '@/hooks/useApi';
@@ -35,22 +32,50 @@ import { useRouter } from 'next/navigation';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { useDebounce } from '@/hooks/useDebounce';
 
+interface ChildWithBalance {
+  id: string;
+  name?: string;
+  first_name?: string;
+  last_name?: string;
+  student_id?: string;
+  class?: string;
+  section?: string;
+  roll_number?: string;
+  outstandingBalance?: number;
+  overdueCount?: number;
+}
+
 export default function ParentChildrenPage() {
   const router = useRouter();
-  const [children, setChildren] = useState<any[]>([]);
-  const [childrenWithBalances, setChildrenWithBalances] = useState<any[]>([]);
+  const [children, setChildren] = useState<ChildWithBalance[]>([]);
+  const [childrenWithBalances, setChildrenWithBalances] = useState<ChildWithBalance[]>([]);
   const [localSearch, setLocalSearch] = useState('');
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 500);
 
   // Fetch summary which includes children with balance info
-  const { loading, execute: fetchChildren } = useApi(
+  type SummaryResponse = {
+    data: {
+      children: ChildWithBalance[];
+    };
+  } | {
+    data: ChildWithBalance[];
+  } | {
+    children: ChildWithBalance[];
+  } | ChildWithBalance[];
+
+  const { loading, execute: fetchChildren } = useApi<SummaryResponse>(
     () => parentPortalApi.getSummary(),
     {
-      onSuccess: (response: any) => {
-        const data = response?.data || response;
-        if (data) {
-          const childrenList = data.children || [];
+      onSuccess: (response) => {
+        const data = response && typeof response === 'object' && 'data' in response ? response.data : response;
+        if (data && typeof data === 'object') {
+          let childrenList: ChildWithBalance[] = [];
+          if (Array.isArray(data)) {
+            childrenList = data;
+          } else if ('children' in data && Array.isArray(data.children)) {
+            childrenList = data.children;
+          }
           // Summary endpoint returns children with balance info
           setChildren(childrenList);
           setChildrenWithBalances(childrenList);
@@ -71,7 +96,7 @@ export default function ParentChildrenPage() {
 
   // Filter children based on search
   const displayChildren = childrenWithBalances.length > 0 ? childrenWithBalances : children;
-  const filteredChildren = displayChildren.filter((child: any) => {
+  const filteredChildren = displayChildren.filter((child) => {
     if (!debouncedSearch) return true;
     const searchLower = debouncedSearch.toLowerCase();
     const name = `${child.first_name || ''} ${child.last_name || ''}`.toLowerCase();
@@ -99,7 +124,7 @@ export default function ParentChildrenPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">My Children</h1>
           <p className="text-muted-foreground">
-            View and manage your children's fee information
+            View and manage your children&apos;s fee information
             {children.length > 0 && (
               <span className="ml-2">({children.length} {children.length === 1 ? 'child' : 'children'})</span>
             )}
@@ -140,7 +165,7 @@ export default function ParentChildrenPage() {
         />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredChildren.map((child: any) => {
+          {filteredChildren.map((child) => {
             // Handle both formats: summary (has 'name') and children (has 'first_name'/'last_name')
             const childName = child.name || `${child.first_name || ''} ${child.last_name || ''}`.trim() || 'Unknown';
             const initials = childName
