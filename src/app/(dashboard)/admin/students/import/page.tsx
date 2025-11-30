@@ -11,24 +11,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-interface CSVRow {
-  student_id: string;
-  first_name: string;
-  last_name: string;
-  class: string;
-  section: string;
-  roll_number: string;
-  date_of_birth: string;
-  gender: string;
-  blood_group?: string;
-  address: string;
-  phone: string;
-  email?: string;
-  emergency_contact: string;
-  emergency_phone: string;
-  admission_date: string;
-}
-
 interface ParsedStudent {
   student_id: string;
   first_name: string;
@@ -73,7 +55,7 @@ export default function ImportStudentsPage() {
 
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
-      const row: any = {};
+      const row: Record<string, string> = {};
       const rowErrors: string[] = [];
 
       headers.forEach((header, index) => {
@@ -173,8 +155,9 @@ export default function ImportStudentsPage() {
       const parsed = parseCSV(text);
       setParsedData(parsed);
       toast.success(`Successfully parsed ${parsed.length} student(s)`);
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to parse CSV file');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to parse CSV file';
+      toast.error(errorMessage);
       setFile(null);
       setParsedData([]);
     } finally {
@@ -232,7 +215,23 @@ STU005,Charlie,Brown,3,A,5,2008-09-30,male,A-,654 Maple Drive,799229348,charlie.
         const cleanPhone = student.phone.replace(/\D/g, '').replace(/^0+/, '');
         const cleanEmergencyPhone = student.emergency_phone.replace(/\D/g, '').replace(/^0+/, '');
 
-        const backendData: any = {
+        const backendData: {
+          student_id: string;
+          first_name: string;
+          last_name: string;
+          class: string;
+          section: string;
+          roll_number: string;
+          date_of_birth: string;
+          gender: 'male' | 'female' | 'other';
+          blood_group: string | null;
+          address: string;
+          phone: string;
+          email: string | null;
+          emergency_contact: string;
+          emergency_phone: string;
+          admission_date: string;
+        } = {
           student_id: student.student_id,
           first_name: student.first_name,
           last_name: student.last_name,
@@ -261,11 +260,17 @@ STU005,Charlie,Brown,3,A,5,2008-09-30,male,A-,654 Maple Drive,799229348,charlie.
             errors: [response.message || 'Failed to create student'],
           });
         }
-      } catch (error: any) {
+      } catch (error) {
         failedCount++;
-        const errorMessages = error.details 
-          ? Object.values(error.details).flat()
-          : [error.message || 'Failed to create student'];
+        let errorMessages: string[] = [];
+        if (error && typeof error === 'object' && 'details' in error) {
+          const details = error.details as Record<string, string | string[]>;
+          errorMessages = Object.values(details).flat().map(String);
+        } else if (error instanceof Error) {
+          errorMessages = [error.message];
+        } else {
+          errorMessages = ['Failed to create student'];
+        }
         errors.push({
           row: i + 2,
           errors: errorMessages,
@@ -323,7 +328,7 @@ STU005,Charlie,Brown,3,A,5,2008-09-30,male,A-,654 Maple Drive,799229348,charlie.
             <li>Phone numbers must start with 1-9 (leading zeros will be removed)</li>
             <li>Upload your CSV file and review the parsed data</li>
             <li>Fix any validation errors before importing</li>
-            <li>Click "Import Students" to add all valid students</li>
+            <li>Click &quot;Import Students&quot; to add all valid students</li>
           </ol>
           <div className="flex gap-2">
             <Button variant="outline" onClick={downloadSampleCSV}>
