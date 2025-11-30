@@ -1,9 +1,11 @@
+const path = require('path');
+
 module.exports = {
   apps: [{
     name: 'fee-management-frontend',
     script: 'npm',
     args: 'run dev',
-    cwd: '/var/www/fee-management',
+    cwd: path.resolve(__dirname),
     instances: 1, // Must be 1 for dev mode
     exec_mode: 'fork', // Must be fork for dev mode
     env: {
