@@ -13,7 +13,6 @@ import {
   CreditCard, 
   DollarSign, 
   AlertTriangle,
-  TrendingUp,
   Calendar,
   UserPlus,
   Receipt,
@@ -22,7 +21,68 @@ import {
 import { useApi } from '@/hooks/useApi';
 import { dashboardApi } from '@/lib/api';
 import { useRouter } from 'next/navigation';
-import { format, formatDistanceToNow, parseISO, startOfMonth, endOfMonth, startOfDay, endOfDay } from 'date-fns';
+
+// Dashboard API response types
+type DailyCollectionItem = {
+  date: string;
+  total: string | number;
+};
+
+type FeeTypeCollectionItem = {
+  fee_type: string;
+  total: string | number;
+};
+
+type ClassWiseCollectionItem = {
+  class: string;
+  total: string | number;
+};
+
+type DashboardTrendsData = {
+  dailyCollection?: DailyCollectionItem[];
+  collectionByFeeType?: FeeTypeCollectionItem[];
+  classWiseCollection?: ClassWiseCollectionItem[];
+};
+
+type BackendPayment = {
+  id: number | string;
+  student?: {
+    first_name?: string;
+    last_name?: string;
+  };
+  payment_date?: string;
+  createdAt?: string;
+  amount_paid: string | number;
+};
+
+type RecentPaymentsData = {
+  recentPayments?: BackendPayment[];
+};
+
+type AlertItem = {
+  type?: string;
+  message: string;
+};
+
+type AlertsData = {
+  alerts?: AlertItem[];
+};
+
+type UpcomingDueItem = {
+  id: number | string;
+  student?: {
+    first_name?: string;
+    last_name?: string;
+    class?: string;
+  };
+  due_date?: string;
+  balance_amount: string | number;
+};
+
+type UpcomingDuesData = {
+  upcomingDues?: UpcomingDueItem[];
+};
+import { format, formatDistanceToNow, parseISO } from 'date-fns';
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -34,25 +94,25 @@ export default function AdminDashboard() {
   );
 
   // Fetch recent payments
-  const { data: recentPaymentsData, loading: paymentsLoading, execute: fetchPayments } = useApi(
+  const { data: recentPaymentsData, loading: paymentsLoading, execute: fetchPayments } = useApi<RecentPaymentsData>(
     () => dashboardApi.getRecentPayments(),
     { immediate: false }
   );
 
   // Fetch upcoming dues
-  const { data: upcomingDuesData, loading: duesLoading, execute: fetchDues } = useApi(
+  const { data: upcomingDuesData, loading: duesLoading, execute: fetchDues } = useApi<UpcomingDuesData>(
     () => dashboardApi.getUpcomingDues(),
     { immediate: false }
   );
 
   // Fetch collection trends
-  const { data: trendsData, loading: trendsLoading, execute: fetchTrends } = useApi(
+  const { data: trendsData, loading: trendsLoading, execute: fetchTrends } = useApi<DashboardTrendsData>(
     () => dashboardApi.getCollectionTrends(),
     { immediate: false }
   );
 
   // Fetch alerts/activities
-  const { data: alertsData, loading: alertsLoading, execute: fetchAlerts } = useApi(
+  const { data: alertsData, loading: alertsLoading, execute: fetchAlerts } = useApi<AlertsData>(
     dashboardApi.getAlerts,
     { immediate: false }
   );
@@ -126,18 +186,18 @@ export default function AdminDashboard() {
     // Group by month from daily collection
     const monthlyMap = new Map<string, number>();
     
-    trendsData.dailyCollection.forEach((item: any) => {
+    trendsData.dailyCollection.forEach((item: DailyCollectionItem) => {
       try {
         const date = item.date ? parseISO(item.date) : new Date();
         const monthKey = format(date, 'MMM');
-        const total = parseFloat(item.total) || 0;
+        const total = parseFloat(String(item.total)) || 0;
         
         if (monthlyMap.has(monthKey)) {
           monthlyMap.set(monthKey, monthlyMap.get(monthKey)! + total);
         } else {
           monthlyMap.set(monthKey, total);
         }
-      } catch (e) {
+      } catch {
         // Skip invalid dates
       }
     });
@@ -155,9 +215,9 @@ export default function AdminDashboard() {
 
     const colors = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FFC658'];
     
-    return trendsData.collectionByFeeType.map((item: any, index: number) => ({
+    return trendsData.collectionByFeeType.map((item: FeeTypeCollectionItem, index: number) => ({
       name: item.fee_type ? item.fee_type.charAt(0).toUpperCase() + item.fee_type.slice(1) : 'Other',
-      value: Math.round(parseFloat(item.total) || 0),
+      value: Math.round(parseFloat(String(item.total)) || 0),
       color: colors[index % colors.length],
     }));
   }, [trendsData]);
@@ -171,11 +231,11 @@ export default function AdminDashboard() {
     // For line chart, we need time series data per class
     // Since we have daily collection, we can group by class and date
     // For now, let's create a simple representation
-    const classData = trendsData.classWiseCollection.map((item: any) => ({
+    const classData = trendsData.classWiseCollection.map((item: ClassWiseCollectionItem) => ({
       name: item.class || 'Unknown',
       data: [{ 
         x: format(new Date(), 'MMM'), 
-        y: Math.round(parseFloat(item.total) || 0) 
+        y: Math.round(parseFloat(String(item.total)) || 0) 
       }],
     }));
 
@@ -183,12 +243,20 @@ export default function AdminDashboard() {
   }, [trendsData]);
 
   // Transform recent activities from payments and alerts
+  type Activity = {
+    id: string | number;
+    type: string;
+    message: string;
+    time: string;
+    amount?: number;
+  };
+
   const recentActivities = useMemo(() => {
-    const activities: any[] = [];
+    const activities: Activity[] = [];
 
     // Add recent payments as activities
     if (recentPaymentsData?.recentPayments) {
-      recentPaymentsData.recentPayments.slice(0, 5).forEach((payment: any) => {
+      recentPaymentsData.recentPayments.slice(0, 5).forEach((payment: BackendPayment) => {
         const studentName = payment.student 
           ? `${payment.student.first_name || ''} ${payment.student.last_name || ''}`.trim()
           : 'Unknown Student';
@@ -203,14 +271,14 @@ export default function AdminDashboard() {
           type: 'payment',
           message: `Payment received from ${studentName}`,
           time: timeAgo,
-          amount: parseFloat(payment.amount_paid) || 0,
+          amount: parseFloat(String(payment.amount_paid)) || 0,
         });
       });
     }
 
     // Add alerts as activities
     if (alertsData?.alerts) {
-      alertsData.alerts.forEach((alert: any, index: number) => {
+      alertsData.alerts.forEach((alert: AlertItem, index: number) => {
         activities.push({
           id: `alert-${index}`,
           type: alert.type || 'info',
@@ -229,7 +297,7 @@ export default function AdminDashboard() {
       return [];
     }
 
-    return upcomingDuesData.upcomingDues.slice(0, 5).map((due: any) => {
+    return upcomingDuesData.upcomingDues.slice(0, 5).map((due: UpcomingDueItem) => {
       const student = due.student || {};
       const studentName = `${student.first_name || ''} ${student.last_name || ''}`.trim() || 'Unknown';
       const className = student.class ? `Class ${student.class}` : 'Unknown Class';
@@ -240,7 +308,7 @@ export default function AdminDashboard() {
         id: due.id,
         student: studentName,
         class: className,
-        amount: Math.round(parseFloat(due.balance_amount) || 0),
+        amount: Math.round(parseFloat(String(due.balance_amount)) || 0),
         dueDate,
       };
     });
@@ -255,7 +323,7 @@ export default function AdminDashboard() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground">
-            Welcome back! Here's what's happening with your fee management.
+            Welcome back! Here&apos;s what&apos;s happening with your fee management.
           </p>
         </div>
         <div className="flex gap-2">
