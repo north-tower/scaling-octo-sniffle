@@ -7,12 +7,6 @@ import { Badge } from '@/components/ui/badge';
 import { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/tables/DataTable';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { 
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { BarChartComponent } from '@/components/charts/BarChart';
 import { PieChartComponent } from '@/components/charts/PieChart';
 import { 
@@ -111,14 +105,26 @@ export default function OutstandingFeesReportPage() {
   ]);
 
   // Fetch outstanding fees data
-  const { loading, execute: fetchOutstandingFees } = useApi(
-    (params: any) => reportsApi.getOutstandingFees(params),
+  type OutstandingFeesResponse = {
+    data: OutstandingFeesData;
+  } | {
+    success: boolean;
+    data: OutstandingFeesData;
+  } | OutstandingFeesData;
+
+  const { loading, execute: fetchOutstandingFees } = useApi<OutstandingFeesResponse>(
+    (params: {
+      academic_year?: string;
+      class?: string;
+      is_overdue?: string;
+    }) => reportsApi.getOutstandingFees(params),
     {
-      onSuccess: (response: any) => {
-        if (response?.data) {
+      onSuccess: (response) => {
+        if (response && typeof response === 'object' && 'data' in response) {
           setOutstandingData(response.data);
-        } else if (response?.success && response?.data) {
-          setOutstandingData(response.data);
+        } else if (response && typeof response === 'object' && 'summary' in response) {
+          // Direct OutstandingFeesData object
+          setOutstandingData(response as OutstandingFeesData);
         }
       },
       onError: (error) => {
@@ -131,7 +137,11 @@ export default function OutstandingFeesReportPage() {
 
   // Fetch data on mount and when filters change
   useEffect(() => {
-    const params: any = {};
+    const params: {
+      academic_year?: string;
+      class?: string;
+      is_overdue?: string;
+    } = {};
     if (academicYear && academicYear !== 'all') params.academic_year = academicYear;
     if (selectedClass && selectedClass !== 'all') params.class = selectedClass;
     if (filterOverdue && filterOverdue !== 'all') {
