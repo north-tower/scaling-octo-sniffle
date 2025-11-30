@@ -34,7 +34,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { useDebounce } from '@/hooks/useDebounce';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { BackendStudent, BackendFeeStructure } from '@/lib/types';
+import { BackendFeeStructure } from '@/lib/types';
 
 interface ChildData {
   id: string;

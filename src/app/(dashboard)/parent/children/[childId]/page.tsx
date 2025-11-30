@@ -21,7 +21,6 @@ import {
   DollarSign,
   AlertTriangle,
   TrendingUp,
-  FileText,
   Eye
 } from 'lucide-react';
 import { parentPortalApi } from '@/lib/api';
@@ -32,23 +31,75 @@ import { useRouter, useParams } from 'next/navigation';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { StatsCard } from '@/components/shared/StatsCard';
 
+interface ChildData {
+  id?: string;
+  name?: string;
+  first_name?: string;
+  last_name?: string;
+  student_id?: string;
+  class?: string;
+  section?: string;
+  roll_number?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  date_of_birth?: string;
+  admission_date?: string;
+  gender?: string;
+  blood_group?: string;
+  status?: 'active' | 'inactive' | 'graduated' | 'transferred';
+  emergency_contact?: string;
+  emergency_contact_name?: string;
+}
+
+interface ChildStats {
+  totalFees?: number;
+  totalPayments?: number;
+  totalPaid?: number;
+  outstandingBalance?: number;
+  monthlyPayments?: number;
+  overdueFees?: number;
+}
+
+interface BalanceSummary {
+  totalAmount?: number;
+  paidAmount?: number;
+  balanceAmount?: number;
+  overdueAmount?: number;
+  overdueCount?: number;
+}
+
 export default function ChildProfilePage() {
   const router = useRouter();
   const params = useParams();
   const childId = params?.childId as string;
   
-  const [child, setChild] = useState<any>(null);
-  const [stats, setStats] = useState<any>(null);
-  const [balance, setBalance] = useState<any>(null);
+  const [child, setChild] = useState<ChildData | null>(null);
+  const [stats, setStats] = useState<ChildStats | null>(null);
+  const [balance, setBalance] = useState<BalanceSummary | null>(null);
 
   // Fetch child profile
-  const { loading: childLoading, execute: fetchChild } = useApi(
+  type ChildProfileResponse = {
+    data: {
+      child: ChildData;
+    };
+  } | {
+    data: ChildData;
+  } | {
+    child: ChildData;
+  } | ChildData;
+
+  const { loading: childLoading, execute: fetchChild } = useApi<ChildProfileResponse>(
     () => parentPortalApi.getChildProfile(childId),
     {
-      onSuccess: (response: any) => {
-        const data = response?.data || response;
-        if (data) {
-          setChild(data.child || data);
+      onSuccess: (response) => {
+        const data = response && typeof response === 'object' && 'data' in response ? response.data : response;
+        if (data && typeof data === 'object') {
+          if ('child' in data && data.child) {
+            setChild(data.child as ChildData);
+          } else {
+            setChild(data as ChildData);
+          }
         }
       },
       onError: (error) => {
@@ -58,13 +109,27 @@ export default function ChildProfilePage() {
   );
 
   // Fetch child stats
-  const { loading: statsLoading, execute: fetchStats } = useApi(
+  type ChildStatsResponse = {
+    data: {
+      stats: ChildStats;
+    };
+  } | {
+    data: ChildStats;
+  } | {
+    stats: ChildStats;
+  } | ChildStats;
+
+  const { loading: statsLoading, execute: fetchStats } = useApi<ChildStatsResponse>(
     () => parentPortalApi.getChildStats(childId),
     {
-      onSuccess: (response: any) => {
-        const data = response?.data || response;
-        if (data) {
-          setStats(data.stats || {});
+      onSuccess: (response) => {
+        const data = response && typeof response === 'object' && 'data' in response ? response.data : response;
+        if (data && typeof data === 'object') {
+          if ('stats' in data && data.stats) {
+            setStats(data.stats as ChildStats);
+          } else {
+            setStats(data as ChildStats);
+          }
         }
       },
       onError: (error) => {
@@ -74,13 +139,27 @@ export default function ChildProfilePage() {
   );
 
   // Fetch child balance summary
-  const { loading: balanceLoading, execute: fetchBalance } = useApi(
+  type ChildBalanceResponse = {
+    data: {
+      summary: BalanceSummary;
+    };
+  } | {
+    data: BalanceSummary;
+  } | {
+    summary: BalanceSummary;
+  } | BalanceSummary;
+
+  const { loading: balanceLoading, execute: fetchBalance } = useApi<ChildBalanceResponse>(
     () => parentPortalApi.getChildBalance(childId),
     {
-      onSuccess: (response: any) => {
-        const data = response?.data || response;
-        if (data) {
-          setBalance(data.summary || {});
+      onSuccess: (response) => {
+        const data = response && typeof response === 'object' && 'data' in response ? response.data : response;
+        if (data && typeof data === 'object') {
+          if ('summary' in data && data.summary) {
+            setBalance(data.summary as BalanceSummary);
+          } else {
+            setBalance(data as BalanceSummary);
+          }
         }
       },
       onError: (error) => {
@@ -432,7 +511,7 @@ export default function ChildProfilePage() {
                     <TrendingUp className="h-5 w-5 text-blue-600" />
                   </div>
                   <div>
-                    <Label className="text-muted-foreground text-sm">This Month's Payments</Label>
+                    <Label className="text-muted-foreground text-sm">This Month&apos;s Payments</Label>
                     <p className="font-semibold">{formatCurrency(stats.monthlyPayments)}</p>
                   </div>
                 </div>
