@@ -7,6 +7,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Search } from 'lucide-react';
+import { BackendStudent } from '@/lib/types';
+
+interface PaginationData {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+interface StudentsResponse {
+  students: BackendStudent[];
+  pagination: PaginationData;
+}
 
 /**
  * Example component showing how to fetch and display students
@@ -15,14 +28,16 @@ import { Loader2, Search } from 'lucide-react';
 export function StudentListExample() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
-  const [students, setStudents] = useState<any[]>([]);
-  const [pagination, setPagination] = useState<any>(null);
+  const [students, setStudents] = useState<BackendStudent[]>([]);
+  const [pagination, setPagination] = useState<PaginationData | null>(null);
 
   // Using the useApi hook for cleaner API calls
-  const { loading, execute } = useApi(studentsApi.getAll, {
+  const { loading, execute } = useApi<StudentsResponse>(studentsApi.getAll, {
     onSuccess: (response) => {
-      setStudents(response.students || []);
-      setPagination(response.pagination);
+      if (response && typeof response === 'object' && 'students' in response) {
+        setStudents(response.students || []);
+        setPagination(response.pagination || null);
+      }
     },
   });
 
@@ -77,21 +92,21 @@ export function StudentListExample() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="font-semibold">
-                      {student.firstName} {student.lastName}
+                      {student.first_name} {student.last_name}
                     </h3>
                     <p className="text-sm text-muted-foreground">
-                      Roll No: {student.rollNumber || student.studentId}
+                      Roll No: {student.roll_number || student.student_id}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Class: {student.class?.name || 'N/A'}
+                      Class: {student.class || 'N/A'}
                     </p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm text-muted-foreground">
-                      {student.email}
+                      {student.email || 'N/A'}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {student.phone}
+                      {student.phone || 'N/A'}
                     </p>
                   </div>
                 </div>

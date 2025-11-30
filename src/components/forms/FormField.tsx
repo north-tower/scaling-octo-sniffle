@@ -26,8 +26,8 @@ export interface FormFieldProps {
   helperText?: string;
   className?: string;
   options?: Array<{ label: string; value: string }>;
-  value?: any;
-  onChange?: (value: any) => void;
+  value?: string | number | boolean | Date | null;
+  onChange?: (value: string | number | boolean | Date | undefined) => void;
   onBlur?: () => void;
 }
 

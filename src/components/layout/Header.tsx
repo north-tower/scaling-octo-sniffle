@@ -21,9 +21,6 @@ import {
   User,
   Settings,
   LogOut,
-  Moon,
-  Sun,
-  Monitor,
 } from 'lucide-react';
 
 interface HeaderProps {

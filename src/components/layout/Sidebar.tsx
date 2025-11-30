@@ -6,28 +6,22 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/store/auth';
 import {
   LayoutDashboard,
   Users,
-  GraduationCap,
   CreditCard,
   FileText,
   Settings,
   BarChart3,
-  Bell,
   LogOut,
-  Menu,
   X,
   User,
   School,
   Receipt,
   Calendar,
   BookOpen,
-  Car,
-  Trophy,
   ClipboardList,
 } from 'lucide-react';
 

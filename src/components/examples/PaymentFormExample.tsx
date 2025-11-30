@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
+import { PaymentMethod } from '@/lib/types';
 
 /**
  * Example component showing how to create a payment
@@ -83,7 +84,7 @@ export function PaymentFormExample() {
           <div className="space-y-2">
             <Label htmlFor="paymentMethod">Payment Method</Label>
             <Select
-              onValueChange={(value) => setValue('paymentMethod', value as any)}
+              onValueChange={(value) => setValue('paymentMethod', value as PaymentMethod)}
               defaultValue="cash"
             >
               <SelectTrigger className={errors.paymentMethod ? 'border-destructive' : ''}>
