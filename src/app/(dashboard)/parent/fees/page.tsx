@@ -32,13 +32,75 @@ import { format } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { useDebounce } from '@/hooks/useDebounce';
+import { BackendFeeStructure, ApiResponse } from '@/lib/types';
+
+interface ChildWithBalance {
+  id: string;
+  name?: string;
+  first_name?: string;
+  last_name?: string;
+  student_id?: string;
+  class?: string;
+  section?: string;
+  roll_number?: string;
+  outstandingBalance?: number;
+  overdueCount?: number;
+}
+
+interface FeeAssignmentWithChild {
+  id: string;
+  student_id: string;
+  childId?: string;
+  childName?: string;
+  childClass?: string;
+  childSection?: string;
+  feeStructure?: BackendFeeStructure;
+  status: 'assigned' | 'paid' | 'overdue';
+  created_at?: string;
+  waived_reason?: string;
+  waived_date?: string;
+}
+
+interface FeeQueryParams {
+  academic_year?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}
+
+interface SummaryStats {
+  totalAmount: number;
+  paidAmount: number;
+  pendingAmount: number;
+  overdueAmount: number;
+  totalCount: number;
+  paidCount: number;
+  pendingCount: number;
+  overdueCount: number;
+}
+
+type SummaryResponse = {
+  data: {
+    children: ChildWithBalance[];
+  };
+} | {
+  children: ChildWithBalance[];
+} | ChildWithBalance[];
+
+type FeesResponse = {
+  data: {
+    fees: FeeAssignmentWithChild[];
+  };
+} | {
+  fees: FeeAssignmentWithChild[];
+} | FeeAssignmentWithChild[];
 
 export default function ParentFeesPage() {
   const router = useRouter();
-  const [children, setChildren] = useState<any[]>([]);
+  const [children, setChildren] = useState<ChildWithBalance[]>([]);
   const [selectedChildId, setSelectedChildId] = useState<string>('all');
-  const [fees, setFees] = useState<any[]>([]);
-  const [filteredFees, setFilteredFees] = useState<any[]>([]);
+  const [fees, setFees] = useState<FeeAssignmentWithChild[]>([]);
+  const [filteredFees, setFilteredFees] = useState<FeeAssignmentWithChild[]>([]);
   const [localSearch, setLocalSearch] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -46,13 +108,18 @@ export default function ParentFeesPage() {
   const debouncedSearch = useDebounce(search, 500);
 
   // Fetch children
-  const { loading: childrenLoading, execute: fetchChildren } = useApi(
+  const { loading: childrenLoading, execute: fetchChildren } = useApi<ChildWithBalance[]>(
     () => parentPortalApi.getSummary(),
     {
-      onSuccess: (response: any) => {
-        const data = response?.data || response;
-        if (data) {
-          const childrenList = data.children || [];
+      onSuccess: (response) => {
+        const data = response && typeof response === 'object' && 'data' in response ? response.data : response;
+        if (data && typeof data === 'object') {
+          let childrenList: ChildWithBalance[] = [];
+          if (Array.isArray(data)) {
+            childrenList = data;
+          } else if ('children' in data && Array.isArray(data.children)) {
+            childrenList = data.children;
+          }
           setChildren(childrenList);
           // Auto-select first child if available
           if (childrenList.length > 0 && selectedChildId === 'all') {
@@ -68,20 +135,23 @@ export default function ParentFeesPage() {
   );
 
   // Fetch fees for selected child
-  const { loading: feesLoading, execute: fetchFees } = useApi(
-    async (childId: string, params?: any) => {
+  const { loading: feesLoading, execute: fetchFees } = useApi<FeeAssignmentWithChild[]>(
+    async (childId: string, params?: FeeQueryParams): Promise<ApiResponse<FeeAssignmentWithChild[]>> => {
       if (childId === 'all') {
         // Fetch fees for all children
-        const promises = children.map((child: any) =>
+        const promises = children.map((child) =>
           parentPortalApi.getChildFees(child.id, params).catch(() => null)
         );
         const results = await Promise.all(promises);
-        const allFees = results
-          .flatMap((result: any, index: number) => {
-            if (!result?.data) return [];
+        const allFees: FeeAssignmentWithChild[] = results
+          .flatMap((result, index) => {
+            if (!result || typeof result !== 'object' || !('data' in result)) return [];
             const child = children[index];
-            const fees = result.data.fees || [];
-            return fees.map((fee: any) => ({
+            const resultData = result.data;
+            const fees = (resultData && typeof resultData === 'object' && 'fees' in resultData && Array.isArray(resultData.fees))
+              ? resultData.fees
+              : [];
+            return fees.map((fee: FeeAssignmentWithChild) => ({
               ...fee,
               childId: child.id,
               childName: child.name || `${child.first_name || ''} ${child.last_name || ''}`.trim(),
@@ -89,18 +159,19 @@ export default function ParentFeesPage() {
               childSection: child.section,
             }));
           });
-        return { success: true, data: { fees: allFees } };
+        return { success: true, data: allFees };
       } else {
-        return parentPortalApi.getChildFees(childId, params);
+        const response = await parentPortalApi.getChildFees(childId, params);
+        const data = response && typeof response === 'object' && 'data' in response ? response.data : response;
+        const feesList = (data && typeof data === 'object' && 'fees' in data && Array.isArray(data.fees))
+          ? data.fees
+          : [];
+        return { success: true, data: feesList };
       }
     },
     {
-      onSuccess: (response: any) => {
-        const data = response?.data || response;
-        if (data) {
-          const feesList = data.fees || [];
-          setFees(feesList);
-        }
+      onSuccess: (feesList) => {
+        setFees(feesList || []);
       },
       onError: (error) => {
         console.error('Failed to fetch fees:', error);
@@ -116,7 +187,7 @@ export default function ParentFeesPage() {
 
   useEffect(() => {
     if (selectedChildId && children.length > 0) {
-      const params: any = {};
+      const params: FeeQueryParams = {};
       if (academicYearFilter !== 'all') {
         params.academic_year = academicYearFilter;
       }
@@ -135,7 +206,7 @@ export default function ParentFeesPage() {
     // Search filter
     if (debouncedSearch) {
       const searchLower = debouncedSearch.toLowerCase();
-      filtered = filtered.filter((fee: any) => {
+      filtered = filtered.filter((fee) => {
         const feeType = (fee.feeStructure?.fee_type || '').toLowerCase();
         const description = (fee.feeStructure?.description || '').toLowerCase();
         const childName = (fee.childName || '').toLowerCase();
@@ -161,15 +232,15 @@ export default function ParentFeesPage() {
   const academicYears = Array.from(
     new Set(
       fees
-        .map((fee: any) => fee.feeStructure?.academic_year)
-        .filter((year: any) => year)
+        .map((fee) => fee.feeStructure?.academic_year)
+        .filter((year): year is string => Boolean(year))
     )
   ).sort();
 
   // Calculate summary statistics
   const summary = fees.reduce(
-    (acc: any, fee: any) => {
-      const amount = parseFloat(fee.feeStructure?.amount || 0);
+    (acc: SummaryStats, fee) => {
+      const amount = parseFloat(fee.feeStructure?.amount || '0');
       acc.totalAmount += amount;
       if (fee.status === 'paid') {
         acc.paidAmount += amount;
@@ -226,7 +297,7 @@ export default function ParentFeesPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Children</SelectItem>
-                  {children.map((child: any) => (
+                  {children.map((child) => (
                     <SelectItem key={child.id} value={child.id}>
                       {child.name || `${child.first_name || ''} ${child.last_name || ''}`.trim()}
                     </SelectItem>
@@ -258,7 +329,7 @@ export default function ParentFeesPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Years</SelectItem>
-                  {academicYears.map((year: any) => (
+                  {academicYears.map((year) => (
                     <SelectItem key={year} value={year}>
                       {year}
                     </SelectItem>
@@ -348,7 +419,7 @@ export default function ParentFeesPage() {
           <CardDescription>
             {selectedChildId === 'all' 
               ? 'Fees for all your children' 
-              : `Fees for ${children.find((c: any) => c.id === selectedChildId)?.name || 'selected child'}`}
+              : `Fees for ${children.find((c) => c.id === selectedChildId)?.name || 'selected child'}`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -368,7 +439,7 @@ export default function ParentFeesPage() {
             />
           ) : (
             <div className="space-y-4">
-              {filteredFees.map((fee: any) => {
+              {filteredFees.map((fee) => {
                 const feeStructure = fee.feeStructure || {};
                 const dueDate = feeStructure.due_date 
                   ? new Date(feeStructure.due_date) 
