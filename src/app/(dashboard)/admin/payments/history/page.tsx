@@ -5,8 +5,8 @@ import { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/tables/DataTable';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, Loader2, Download, Calendar, Filter, X } from 'lucide-react';
 import { reportsApi, paymentsApi } from '@/lib/api';
 import { useApi } from '@/hooks/useApi';
@@ -68,9 +68,15 @@ interface Payment {
 export default function PaymentHistoryPage() {
   const router = useRouter();
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(50);
+  const [limit] = useState(50);
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [pagination, setPagination] = useState<any>(null);
+  const [pagination, setPagination] = useState<{
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    totalItems?: number;
+  } | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
   const [showFilters, setShowFilters] = useState(false);
@@ -97,22 +103,61 @@ export default function PaymentHistoryPage() {
   });
 
   // Fetch payments using reports API
-  const { loading, execute: fetchPayments } = useApi(
-    (params: any) => reportsApi.getPaymentHistory(params),
-    {
-      onSuccess: (response: any) => {
-        let paymentsData = [];
-        let paginationData = null;
+  type PaymentHistoryResponse = {
+    payments: Payment[];
+    pagination?: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+      totalItems?: number;
+    };
+  } | {
+    data: {
+      payments: Payment[];
+      pagination?: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+        totalItems?: number;
+      };
+    };
+  } | {
+    data: Payment[];
+  } | Payment[];
 
-        if (response?.payments) {
+  const { loading, execute: fetchPayments } = useApi<PaymentHistoryResponse>(
+    (params: {
+      page?: number;
+      limit?: number;
+      start_date?: string;
+      end_date?: string;
+      student_id?: string;
+      payment_method?: string;
+      class?: string;
+      academic_year?: string;
+    }) => reportsApi.getPaymentHistory(params),
+    {
+      onSuccess: (response) => {
+        let paymentsData: Payment[] = [];
+        let paginationData: {
+          page: number;
+          limit: number;
+          total: number;
+          totalPages: number;
+          totalItems?: number;
+        } | null = null;
+
+        if (response && typeof response === 'object' && 'payments' in response && Array.isArray(response.payments)) {
           paymentsData = response.payments;
-          paginationData = response.pagination;
-        } else if (response?.data) {
-          if (response.data.payments) {
-            paymentsData = response.data.payments;
-            paginationData = response.data.pagination;
-          } else if (Array.isArray(response.data)) {
+          paginationData = response.pagination || null;
+        } else if (response && typeof response === 'object' && 'data' in response) {
+          if (Array.isArray(response.data)) {
             paymentsData = response.data;
+          } else if (response.data && typeof response.data === 'object' && 'payments' in response.data && Array.isArray(response.data.payments)) {
+            paymentsData = response.data.payments;
+            paginationData = response.data.pagination || null;
           }
         } else if (Array.isArray(response)) {
           paymentsData = response;
@@ -144,7 +189,16 @@ export default function PaymentHistoryPage() {
 
   // Fetch on mount and when params change
   useEffect(() => {
-    const params: any = {
+    const params: {
+      page: number;
+      limit: number;
+      start_date?: string;
+      end_date?: string;
+      student_id?: string;
+      payment_method?: string;
+      class?: string;
+      academic_year?: string;
+    } = {
       page,
       limit,
     };
@@ -189,9 +243,10 @@ export default function PaymentHistoryPage() {
     try {
       await paymentsApi.getReceipt(paymentId);
       toast.success('Receipt downloaded');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to download receipt:', error);
-      toast.error(error?.message || 'Failed to download receipt');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to download receipt';
+      toast.error(errorMessage);
     }
   };
 
