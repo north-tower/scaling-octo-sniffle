@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal, Eye, Edit, Trash2, Plus, BookOpen, Loader2, Search, Users } from 'lucide-react';
-import { Class } from '@/lib/types';
+import { Class, BackendStudent, ApiResponse, ApiError, PaginatedResponse } from '@/lib/types';
 import { classesApi } from '@/lib/api';
 import { useApi } from '@/hooks/useApi';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -34,8 +34,30 @@ import { Label } from '@/components/ui/label';
 import { createClassSchema } from '@/lib/validations';
 import { format } from 'date-fns';
 
+// Backend class type
+type BackendClass = {
+  id?: number | string;
+  name?: string;
+  grade?: number;
+  grade_level?: number;
+  section?: string;
+  academic_year_id?: string;
+  academicYearId?: string;
+  academic_year?: string | {
+    id?: number | string;
+    name?: string;
+    start_date?: string;
+    end_date?: string;
+    is_active?: boolean;
+    created_at?: string;
+    updated_at?: string;
+  };
+  created_at?: string;
+  updated_at?: string;
+};
+
 // Transform backend class data to frontend format
-const transformClass = (backendClass: any): Class => {
+const transformClass = (backendClass: BackendClass): Class => {
   return {
     id: backendClass.id?.toString() || '',
     name: backendClass.name || '',
@@ -69,14 +91,18 @@ export default function ClassesPage() {
   const [limit, setLimit] = useState(10);
   const [search, setSearch] = useState('');
   const [classes, setClasses] = useState<Class[]>([]);
-  const [pagination, setPagination] = useState<any>(null);
-  const [localSearch, setLocalSearch] = useState('');
+  const [pagination, setPagination] = useState<{
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  } | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isStudentsDialogOpen, setIsStudentsDialogOpen] = useState(false);
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
-  const [classStudents, setClassStudents] = useState<any[]>([]);
+  const [classStudents, setClassStudents] = useState<BackendStudent[]>([]);
   const [formData, setFormData] = useState<Partial<CreateClassForm>>({
     name: '',
     grade: 1,
@@ -98,27 +124,17 @@ export default function ClassesPage() {
   const debouncedSearch = useDebounce(search, 500);
 
   // Fetch classes
-  const { loading, execute: fetchClasses } = useApi(
-    (params: any) => classesApi.getAll(params),
+  const { loading, execute: fetchClasses } = useApi<{ classes: BackendClass[]; pagination?: { page: number; limit: number; total: number; totalPages: number } } | BackendClass[]>(
+    (params: { page?: number; limit?: number; search?: string }) => classesApi.getAll(params),
     {
-      onSuccess: (response: any) => {
+      onSuccess: (response) => {
         // Handle different response structures
-        let classesData = [];
-        let paginationData = null;
+        let classesData: BackendClass[] = [];
+        let paginationData: { page: number; limit: number; total: number; totalPages: number } | null = null;
 
-        if (response?.classes) {
+        if (response && typeof response === 'object' && 'classes' in response && Array.isArray(response.classes)) {
           classesData = response.classes;
-          paginationData = response.pagination;
-        } else if (response?.data) {
-          if (Array.isArray(response.data)) {
-            classesData = response.data;
-          } else if (response.data.classes) {
-            classesData = response.data.classes;
-            paginationData = response.data.pagination;
-          } else if (response.data.data) {
-            classesData = response.data.data;
-            paginationData = response.data.pagination;
-          }
+          paginationData = response.pagination || null;
         } else if (Array.isArray(response)) {
           classesData = response;
         }
@@ -141,19 +157,13 @@ export default function ClassesPage() {
   );
 
   // Fetch students for a class
-  const { loading: studentsLoading, execute: fetchClassStudents } = useApi(
+  const { loading: studentsLoading, execute: fetchClassStudents } = useApi<{ students: BackendStudent[] } | BackendStudent[]>(
     (id: string) => classesApi.getStudents(id),
     {
-      onSuccess: (response: any) => {
-        let studentsData = [];
-        if (response?.students) {
+      onSuccess: (response) => {
+        let studentsData: BackendStudent[] = [];
+        if (response && typeof response === 'object' && 'students' in response && Array.isArray(response.students)) {
           studentsData = response.students;
-        } else if (response?.data) {
-          if (Array.isArray(response.data)) {
-            studentsData = response.data;
-          } else if (response.data.students) {
-            studentsData = response.data.students;
-          }
         } else if (Array.isArray(response)) {
           studentsData = response;
         }
@@ -167,8 +177,8 @@ export default function ClassesPage() {
   );
 
   // Create class
-  const { execute: createClass } = useApi(
-    (data: any) => classesApi.create(data),
+  const { execute: createClass } = useApi<unknown, { name: string; grade: number; section: string; academic_year_id: string }>(
+    (data: { name: string; grade: number; section: string; academic_year_id: string }) => classesApi.create(data),
     {
       onSuccess: () => {
         toast.success('Class created successfully');
@@ -176,15 +186,15 @@ export default function ClassesPage() {
         resetForm();
         fetchClasses({ page, limit, search: debouncedSearch });
       },
-      onError: (error: any) => {
+      onError: (error: ApiError) => {
         toast.error(error?.message || 'Failed to create class');
       },
     }
   );
 
   // Update class
-  const { execute: updateClass } = useApi(
-    (data: { id: string; data: any }) => classesApi.update(data.id, data.data),
+  const { execute: updateClass } = useApi<unknown, { id: string; data: { name: string; grade: number; section: string; academic_year_id: string } }>(
+    (data: { id: string; data: { name: string; grade: number; section: string; academic_year_id: string } }) => classesApi.update(data.id, data.data),
     {
       onSuccess: () => {
         toast.success('Class updated successfully');
@@ -192,7 +202,7 @@ export default function ClassesPage() {
         resetForm();
         fetchClasses({ page, limit, search: debouncedSearch });
       },
-      onError: (error: any) => {
+      onError: (error: ApiError) => {
         toast.error(error?.message || 'Failed to update class');
       },
     }
@@ -206,7 +216,7 @@ export default function ClassesPage() {
         toast.success('Class deleted successfully');
         fetchClasses({ page, limit, search: debouncedSearch });
       },
-      onError: (error: any) => {
+      onError: (error: ApiError) => {
         toast.error(error?.message || 'Failed to delete class');
       },
     }
@@ -220,14 +230,14 @@ export default function ClassesPage() {
 
   // Filter classes locally based on search
   const filteredClasses = useMemo(() => {
-    if (!localSearch) return classes;
-    const searchLower = localSearch.toLowerCase();
+    if (!search) return classes;
+    const searchLower = search.toLowerCase();
     return classes.filter(cls =>
       cls.name.toLowerCase().includes(searchLower) ||
       cls.section.toLowerCase().includes(searchLower) ||
       cls.grade.toString().includes(searchLower)
     );
-  }, [classes, localSearch]);
+  }, [classes, search]);
 
   const resetForm = () => {
     setFormData({
@@ -403,7 +413,7 @@ export default function ClassesPage() {
         );
       },
     },
-  ], []);
+  ], [handleView, handleViewStudents, handleEdit, handleDelete]);
 
   return (
     <div className="space-y-6">
@@ -643,7 +653,7 @@ export default function ClassesPage() {
             </div>
           ) : classStudents.length > 0 ? (
             <div className="space-y-2 py-4">
-              {classStudents.map((student: any) => (
+              {classStudents.map((student: BackendStudent) => (
                 <div key={student.id} className="flex items-center justify-between p-3 border rounded-lg">
                   <div>
                     <p className="font-medium">
